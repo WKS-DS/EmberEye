@@ -1,0 +1,20 @@
+# Semester 1, weeks 1-4: minimal deps to run the recorded-footage adapter.
+# Add more as we build new pipeline stages.
+
+# Core
+numpy>=1.26
+opencv-python>=4.9
+
+# Later (uncomment as we build):
+# torch>=2.2               # ML
+# ultralytics>=8.2         # YOLOv11 for detection
+# fastapi>=0.110           # dashboard API
+# uvicorn[standard]>=0.29  # ASGI server
+# pydantic>=2.6            # network validation
+# psycopg[binary]>=3.1     # PostgreSQL
+# shapely>=2.0             # spatial geometry
+# pyproj>=3.6              # geo transforms
+# mavsdk>=2.0              # PX4 comms (simulated + real prototype)
+
+# Dev
+pytest>=8.0
