@@ -7,6 +7,7 @@ in each new stage.
 
 Usage:
     python -m embereye.run --adapter recorded --input data/recordings/demo_flight/
+    python -m embereye.run --adapter sim --duration 120
 """
 
 from __future__ import annotations
@@ -17,6 +18,7 @@ from pathlib import Path
 
 from embereye.adapters.base import DroneAdapter
 from embereye.adapters.recorded import RecordedFootageAdapter
+from embereye.adapters.sim import SimAdapter
 
 
 def build_adapter(name: str, args: argparse.Namespace) -> DroneAdapter:
@@ -33,8 +35,9 @@ def build_adapter(name: str, args: argparse.Namespace) -> DroneAdapter:
             playback_fps=args.fps,
             loop=args.loop,
         )
+    if name == "sim":
+        return SimAdapter(duration_s=args.duration)
     # Future:
-    #   if name == "simulated": return SimulatedAdapter(...)
     #   if name == "rpi_custom": return RpiCustomAdapter(...)
     #   if name == "dji":        return DjiAdapter(...)
     raise SystemExit(f"Unknown adapter: {name}")
@@ -61,10 +64,11 @@ async def main_async(args: argparse.Namespace) -> None:
 
 def main() -> None:
     parser = argparse.ArgumentParser(description="EmberEye runner")
-    parser.add_argument("--adapter", required=True, choices=["recorded"], help="Which drone adapter to use")
+    parser.add_argument("--adapter", required=True, choices=["recorded", "sim"], help="Which drone adapter to use")
     parser.add_argument("--input",   type=Path, help="Path to recording directory (recorded adapter)")
     parser.add_argument("--fps",     type=float, default=None, help="Playback fps (recorded adapter); default = as fast as possible")
     parser.add_argument("--loop",    action="store_true", help="Loop the recording forever")
+    parser.add_argument("--duration", type=float, default=600.0, help="Length of the simulated flight in seconds (sim adapter)")
     args = parser.parse_args()
 
     try:

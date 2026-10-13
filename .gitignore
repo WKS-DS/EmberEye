@@ -8,6 +8,7 @@ __pycache__/
 .pytest_cache/
 .venv/
 venv/
+venv.nosync/
 
 # Jupyter
 .ipynb_checkpoints/
