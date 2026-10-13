@@ -31,12 +31,13 @@ recorded footage, without needing a drone in the air every day.
 ```
 embereye/
 ├── docs/
+│   ├── ARCHITECTURE.md             # Three-stage system design
 │   └── PARTS_LIST.md               # Hardware budget for prototype
 ├── src/embereye/
 │   ├── adapters/                   # Drone-platform-specific input layers
 │   │   ├── base.py                 # Adapter interface — all others inherit this
 │   │   ├── recorded.py             # Read pre-recorded flights (dev + reproducibility)
-│   │   ├── simulated.py            # PX4 SITL / Gazebo interface (later)
+│   │   ├── sim.py                  # Simulated drone over a simulated fire (MuJoCo)
 │   │   ├── rpi_custom.py           # Our physical prototype (later)
 │   │   └── dji.py                  # Stub for DJI SDK (later)
 │   ├── pipeline/                   # The actual data science
@@ -45,6 +46,9 @@ embereye/
 │   │   ├── georef.py               # Pixel coordinates → real-world coordinates
 │   │   ├── tracker.py              # Link detections across frames
 │   │   └── fire_model.py           # Perimeter + spread prediction
+│   ├── prediction/                 # Fire spread model + terrain
+│   ├── sim/                        # MuJoCo fire simulator (ground truth for testing)
+│   ├── geo.py                      # GPS <-> local metres, ground grid
 │   ├── models/                     # Domain types shared by everything
 │   │   └── types.py                # Frame, Detection, Track, etc.
 │   ├── dashboard/                  # Web UI backend (FastAPI)
@@ -72,8 +76,11 @@ python -m embereye.run --adapter recorded --input data/recordings/demo_flight.mp
 # Later: run against physical prototype
 python -m embereye.run --adapter rpi_custom
 
-# Later: run against simulated drone in Gazebo
-python -m embereye.run --adapter simulated
+# Run against the built-in fire simulator (no hardware or footage needed)
+python -m embereye.run --adapter sim --duration 120
+
+# Save a simulated flight with a preview video
+python -m embereye.sim.record --out data/sim/demo
 ```
 
 ---

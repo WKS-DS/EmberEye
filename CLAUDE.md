@@ -24,6 +24,8 @@ Pipeline
 Dashboard (FastAPI + web UI)
 ```
 
+The full three-stage design (detection, spread prediction, suppression support) is in `docs/ARCHITECTURE.md`.
+
 ## Key Directories
 
 ```
@@ -31,20 +33,34 @@ EmberEye/
 ├── src/embereye/
 │   ├── adapters/       # Drone platform adapters
 │   │   ├── base.py     # DroneAdapter ABC
-│   │   └── recorded.py # Playback from files
+│   │   ├── recorded.py # Playback from files
+│   │   └── sim.py      # Simulated drone over a simulated fire
 │   ├── models/
 │   │   └── types.py    # Frame, Detection, Track, etc.
+│   ├── prediction/     # Stage 2
+│   │   ├── terrain.py  # Elevation grid -> slope and aspect
+│   │   └── spread.py   # SpreadPredictor (arrival-time fire spread)
+│   ├── sim/            # MuJoCo fire simulator (ground truth for testing)
+│   │   ├── camera.py   # CameraModel, CameraPose, OrbitPath
+│   │   ├── world.py    # MuJoCo scene: ground tiles + camera
+│   │   ├── fire_sim.py # FireSim, Scenario, SimObservation
+│   │   └── record.py   # Save a simulated flight to disk
+│   ├── geo.py          # LocalFrame (GPS <-> metres), GroundGrid
 │   ├── pipeline/       # Detection pipeline (WIP)
 │   └── run.py          # Entry point
 ├── notebooks/
 │   ├── 01_flame_exploration.ipynb
 │   └── 02_generate_annotations.ipynb
 ├── data/
-│   └── flame2/         # FLAME 2 dataset (not in git)
-│       ├── frames/     # 53,451 RGB + thermal pairs
-│       └── labels.txt  # Fire/smoke labels
+│   ├── flame2/         # FLAME 2 dataset (not in git)
+│   │   ├── frames/     # 53,451 RGB + thermal pairs
+│   │   └── labels.txt  # Fire/smoke labels
+│   └── sim/            # Simulator output (not in git)
 ├── tests/
-└── docs/
+├── docs/
+│   ├── ARCHITECTURE.md
+│   └── PARTS_LIST.md
+└── venv.nosync/        # Python environment (not in git)
 ```
 
 ## Code Conventions
@@ -65,6 +81,17 @@ EmberEye/
 4. 🔄 Generate YOLO bounding box annotations
 5. ⬜ Train YOLOv11 on annotated data
 6. ⬜ Integrate detector into pipeline
+
+### Simulation Proof of Concept
+
+Build order from `docs/ARCHITECTURE.md`. The sim tests everything except the detector.
+
+1. ✅ Sim adapter — SpreadPredictor fire on a ground grid, scripted MuJoCo camera, exact pose
+2. ⬜ GeoRef + Fire Mapper — score against sim ground truth
+3. ⬜ Arrival-time predictor — test with wrong wind/fuel vs ground truth
+4. 🔄 FLAME 2 detector — parallel track (the list above)
+
+How the sim works: `FireSim.run()` yields a `SimObservation` per frame with the RGB image, a fire mask read from MuJoCo's segmentation render (no ML), fire outlines as pixel polygons (same layout as YOLO `masks.xy`), the exact camera pose, and the true state of every ground cell.
 
 ### Annotation Strategy
 
@@ -90,31 +117,48 @@ git push origin main
 ## Running the Project
 
 ```bash
-# Install dependencies
+# One-time setup: create the environment and install everything
+python3.11 -m venv venv.nosync
+source venv.nosync/bin/activate
 pip install -r requirements.txt
+pip install -e .
+
+# Every new terminal: switch the environment on
+source venv.nosync/bin/activate
 
 # Run with recorded footage
 python -m embereye.run --adapter recorded --input data/recordings/demo/
 
+# Run the fire simulator through the adapter interface
+python -m embereye.run --adapter sim --duration 120
+
+# Save a simulated flight (frames, masks, poses, preview.mp4) to data/sim/demo/
+python -m embereye.sim.record --out data/sim/demo
+
 # Run tests
 pytest
 ```
+
+The environment folder is called `venv.nosync` (not `.venv`) on purpose: the Desktop syncs to iCloud, which marks files in dot-folders as hidden, and Python then ignores the file that makes `import embereye` work. The `.nosync` ending also keeps iCloud from uploading the environment.
 
 ## Data Files (not in git)
 
 Large files live in `data/` which is gitignored:
 - `data/flame2/` — FLAME 2 dataset (~8GB)
 - `data/recordings/` — Test video files
+- `data/sim/` — Simulator output
 - `data/weights/` — Trained model weights
 
 ## Dependencies
 
 Core (now):
 - numpy, opencv-python, pytest
+- mujoco (fire simulator), pyproj (GPS <-> metres)
 
 Coming soon:
-- ultralytics (YOLOv11)
+- ultralytics (YOLO11)
 - torch
+- shapely (Fire Mapper)
 - fastapi, uvicorn (dashboard)
 
 ## Notes for Claude Code

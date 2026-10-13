@@ -4,6 +4,8 @@
 # Core
 numpy>=1.26
 opencv-python>=4.9
+mujoco>=3.1                # fire simulator (rendering + segmentation)
+pyproj>=3.6                # geo transforms (GPS <-> metres)
 
 # Later (uncomment as we build):
 # torch>=2.2               # ML
@@ -13,7 +15,6 @@ opencv-python>=4.9
 # pydantic>=2.6            # network validation
 # psycopg[binary]>=3.1     # PostgreSQL
 # shapely>=2.0             # spatial geometry
-# pyproj>=3.6              # geo transforms
 # mavsdk>=2.0              # PX4 comms (simulated + real prototype)
 
 # Dev
