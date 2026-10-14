@@ -63,7 +63,8 @@ EmberEye/
 │   ├── test_geo.py
 │   ├── test_recorded.py
 │   ├── test_sim.py
-│   └── test_spread.py
+│   ├── test_spread.py
+│   └── test_types.py
 ├── docs/
 │   ├── ARCHITECTURE.md
 │   └── PARTS_LIST.md
