@@ -14,6 +14,8 @@ The **Dashboard** and **Drone** span all stages, providing the interface and sen
 
 ## Stage 1: Detection Phase
 
+**Pipeline order:** Detector → GeoRef → Temporal Filter → Fire Mapper → Alerter. The temporal filter works on the ground grid, so it runs after GeoRef.
+
 ### 1. Detector (YOLO11 Segmentation)
 
 **Purpose:** Runs inference on each video frame to detect and segment fire regions. Outputs pixel masks with class labels and confidence scores. Segmentation (not detection boxes) provides the outlines needed for perimeter mapping.
@@ -39,13 +41,13 @@ for result in results:
 ```
 
 **Training data strategy:**
-- Generate labels from thermal imagery (threshold at ~180°C for fire)
-- Train model on RGB frames using thermal-derived masks
+- Generate masks from the thermal frames with the palette-aware method in `src/embereye/data/flame2.py` (in progress). FLAME 2's thermal frames are false-colour JPEGs, not temperatures: the colour palette changes partway through the dataset and appears to be rescaled frame by frame, so no fixed pixel threshold finds fire across the whole set.
+- Train the model on RGB frames using the thermal-derived masks, **after** checking that RGB and thermal pixels line up. That is unverified: on frame 13701, thermal outlines drawn on the RGB frame matched nothing visible. Many fire frames are also mostly smoke in RGB, so some fire the thermal camera sees is invisible in RGB.
 - Hand-label a separate test set (~300 frames) to avoid circular evaluation
-- Split FLAME 2 by sequence (not random) to prevent data leakage from consecutive frames
+- Split FLAME 2 into contiguous blocks of frames, not at random, so near-identical neighbouring frames never land in different splits. All no-fire frames are frames 1–13700 (before the burn), so validation and test each need a block from that range.
 
 **Hardware:**
-- On-drone (edge): NVIDIA Jetson Orin Nano (~$500) — runs YOLO11 at 15-30 FPS
+- On-drone (edge): NVIDIA Jetson Orin Nano (~$500) — runs YOLO11 at 15-30 FPS. TODO(Will): reconcile with `docs/PARTS_LIST.md`, which budgets a Raspberry Pi 5.
 - Ground station: Any GPU (RTX 3060+) for real-time, or CPU for slower processing
 - Optional: Thermal camera (FLIR Lepton ~$200, or FLIR Vue for higher-end)
 
@@ -57,112 +59,57 @@ for result in results:
 
 ---
 
-### 2. Temporal Filter (replaces Tracker)
+### 2. GeoRef (Georeferencing Module)
 
-**Purpose:** Confirms detections over multiple frames before alerting. Standard object trackers (ByteTrack, BoT-SORT) assume separate objects; fire merges, splits, and most apparent motion is camera movement. Use temporal filtering only to reduce false positives.
+**Purpose:** Find the point on the ground that a pixel shows, in local metres (and from there, GPS). Inputs: pixel (x, y), the camera pose from telemetry, the camera's field of view, and terrain elevation.
 
-**How to build:**
-- Require N consecutive frames with overlapping detections before confirming
-- Use IoU between frame masks, not track IDs
-- Pass confirmed detections to Fire Mapper
+**How it works:**
+1. **A ray per pixel.** Build the camera pose from telemetry (position, heading, gimbal pitch and roll) and get the pixel's viewing direction with `CameraModel.pixel_rays(pose, x, y)` from `sim/camera.py`. This is exact pinhole-camera geometry, tested as the inverse of `CameraModel.project()`.
+2. **Intersect the ray with the terrain.** Step along the ray in coarse steps until it drops below `Terrain.elevation`, then narrow down the crossing point by bisection.
+3. **Camera height from MSL altitude + DEM**, not "AGL under the drone". The ground under the drone is not the ground the camera is looking at, so a single height-above-ground number can't place an oblique view.
 
-```python
-class TemporalFilter:
-    def __init__(self, confirm_frames=3, iou_threshold=0.3):
-        self.confirm_frames = confirm_frames
-        self.iou_threshold = iou_threshold
-        self.history = []  # list of recent masks
-    
-    def update(self, masks):
-        self.history.append(masks)
-        if len(self.history) > self.confirm_frames:
-            self.history.pop(0)
-        
-        if len(self.history) < self.confirm_frames:
-            return []
-        
-        # Find masks with consistent overlap across history
-        confirmed = []
-        for mask in self.history[-1]:
-            if self._has_consistent_overlap(mask):
-                confirmed.append(mask)
-        return confirmed
-    
-    def _has_consistent_overlap(self, mask):
-        # Check IoU with at least one mask in each prior frame
-        for frame_masks in self.history[:-1]:
-            if not any(self._iou(mask, m) > self.iou_threshold for m in frame_masks):
-                return False
-        return True
-```
+**Coordinates:** use `geo.LocalFrame` for GPS ↔ metres. It picks the UTM zone from the longitude (Spokane is zone 11, EPSG:32611). Never hard-code a zone.
 
-**Hardware:** CPU only — minimal overhead
-
----
-
-### 3. GeoRef (Georeferencing Module)
-
-**Purpose:** Converts pixel coordinates to real-world GPS coordinates. Fuses drone telemetry (position, altitude AGL, heading, gimbal pitch/roll) with camera intrinsics and terrain elevation.
-
-**How to build:**
-- Input: pixel (x, y), drone GPS, altitude AGL (not ASL), heading, gimbal angles, camera FOV
-- Require terrain elevation from Stage 2's Terrain Analyzer for non-flat ground
-- Ray-cast from camera through image plane to terrain intersection
+**Why terrain matters:** on the simulator's 40 m demo hill, intersecting rays with a flat plane at the ground height under the drone misplaces points by a mean of 26–43 m per frame (95th percentile 64–124 m), measured on 21 frames of the demo orbit. On flat ground the same method is exact.
 
 ```python
 import numpy as np
-from pyproj import Transformer
 
-class GeoRef:
-    def __init__(self, camera_fov_h, camera_fov_v, image_width, image_height):
-        self.fov_h = np.radians(camera_fov_h)
-        self.fov_v = np.radians(camera_fov_v)
-        self.img_w = image_width
-        self.img_h = image_height
-        self.transformer = Transformer.from_crs("EPSG:4326", "EPSG:32610", always_xy=True)  # UTM zone 10N
-    
-    def pixel_to_gps(self, pixel_x, pixel_y, drone_lat, drone_lon, altitude_agl, 
-                     heading_deg, gimbal_pitch_deg, terrain_elevation_func=None):
-        # Pixel offset from center
-        cx, cy = self.img_w / 2, self.img_h / 2
-        dx = (pixel_x - cx) / cx  # -1 to 1
-        dy = (pixel_y - cy) / cy  # -1 to 1
-        
-        # Angular offset
-        az_offset = dx * (self.fov_h / 2)
-        el_offset = dy * (self.fov_v / 2)
-        
-        # Total angles (gimbal pitch: 0 = forward, -90 = nadir)
-        azimuth = np.radians(heading_deg) + az_offset
-        elevation = np.radians(gimbal_pitch_deg) + el_offset
-        
-        # Ray direction (NED frame)
-        ray_n = np.cos(elevation) * np.cos(azimuth)
-        ray_e = np.cos(elevation) * np.sin(azimuth)
-        ray_d = -np.sin(elevation)  # positive down
-        
-        if ray_d <= 0:
-            return None  # ray points up, no ground intersection
-        
-        # Ground intersection (flat terrain approximation)
-        t = altitude_agl / ray_d
-        offset_n = ray_n * t
-        offset_e = ray_e * t
-        
-        # Convert to GPS
-        drone_x, drone_y = self.transformer.transform(drone_lon, drone_lat)
-        target_x = drone_x + offset_e
-        target_y = drone_y + offset_n
-        
-        target_lon, target_lat = self.transformer.transform(target_x, target_y, direction='INVERSE')
-        
-        # Optional: iterate with terrain elevation for accuracy
-        if terrain_elevation_func is not None:
-            # Refine intersection with actual terrain height
-            pass
-        
-        return target_lat, target_lon
+def georef_pixel(camera, pose, x, y, terrain, grid, step_m=5.0, max_range_m=3000.0):
+    """(east, north, up) of the ground point seen by pixel (x, y), or None.
+
+    camera:  sim.camera.CameraModel       pose: sim.camera.CameraPose
+    terrain: prediction.terrain.Terrain   grid: geo.GroundGrid (same shape as terrain)
+    """
+    ray = camera.pixel_rays(pose, x, y)      # unit vector in (east, north, up)
+    start = pose.position                     # local metres; up = MSL altitude - LocalFrame.origin_alt_m
+
+    def height_above_ground(distance):
+        east, north, up = start + distance * ray
+        cell = grid.cell_at(east, north)
+        ground = terrain.elevation[cell] if cell is not None else terrain.elevation.min()
+        return up - ground
+
+    # 1. Coarse steps until the ray is below the ground.
+    near = 0.0
+    for far in np.arange(step_m, max_range_m, step_m):
+        if height_above_ground(far) <= 0:
+            # 2. Bisection: halve the gap between "still above" and "below" 30 times.
+            for _ in range(30):
+                middle = (near + far) / 2
+                if height_above_ground(middle) > 0:
+                    near = middle
+                else:
+                    far = middle
+            return start + far * ray
+        near = far
+    return None     # never reaches the ground within max_range_m (e.g. a pixel showing sky)
 ```
+
+Notes:
+- The elevation lookup is nearest-cell, which matches the simulator's flat-topped tiles exactly. For a real DEM, interpolate (bilinear).
+- Coarse steps can jump over a ridge thinner than `step_m`, so keep `step_m` below the DEM cell size.
+- In the sim, the true ground point for a pixel comes from `SimObservation.cell_ids` (which cell it shows) plus the same ray/terrain intersection. See Scoring under System-Level Validation.
 
 **Hardware:**
 - Drone with GPS module and IMU (standard)
@@ -171,83 +118,83 @@ class GeoRef:
 
 ---
 
-### 4. Fire Mapper
+### 3. Temporal Filter (replaces Tracker)
 
-**Purpose:** Accumulates georeferenced detections into a ground grid of burning cells. Bridges Stage 1 (per-frame masks) to Stage 2 (fire perimeter grid).
+**Purpose:** Reduce false positives by confirming fire over several observations before it is mapped or alerted on. Standard object trackers (ByteTrack, BoT-SORT) assume separate, solid objects; fire merges and splits, and from a moving drone most apparent motion is the camera's.
 
-**How to build:**
-- Maintain a spatial grid (e.g., 10m cells)
-- Project each confirmed mask polygon to ground coordinates
-- Mark cells as burning; track first-seen and last-seen times
-- Output current fire perimeter as grid or polygon
+**Where it runs:** on the **ground grid, after GeoRef**, not in image space. Comparing masks between frames in pixel coordinates mixes real fire change with camera motion; comparing the same ground cell across frames does not.
+
+**Rule:** a cell is confirmed once it has been seen burning in at least N of the last M observations in which it was in view. Frames where the cell was out of view count neither way.
 
 ```python
 import numpy as np
-from shapely.geometry import Polygon, box
-from shapely.ops import unary_union
+
+class TemporalFilter:
+    """Confirm fire cell by cell on the ground grid. Input comes from GeoRef."""
+
+    def __init__(self, grid_shape, n=3, m=5):
+        self.n = n
+        # The last m observations of every cell: 1 = burning, 0 = clear, -1 = none yet.
+        self.recent = np.full((m,) + tuple(grid_shape), -1, dtype=np.int8)
+        self.confirmed = np.zeros(grid_shape, dtype=bool)
+
+    def update(self, in_view, burning):
+        """in_view, burning: (rows, cols) True/False grids for one frame."""
+        # Only cells in view this frame get a new entry; the rest keep their history.
+        self.recent[:, in_view] = np.roll(self.recent[:, in_view], 1, axis=0)
+        self.recent[0, in_view] = burning[in_view]
+        self.confirmed |= (self.recent == 1).sum(axis=0) >= self.n
+        return self.confirmed
+```
+
+The `in_view` and `burning` grids for a frame come from georeferencing that frame's pixels onto the `GroundGrid` (see Fire Mapper for how).
+
+**Hardware:** CPU only — minimal overhead
+
+---
+
+### 4. Fire Mapper
+
+**Purpose:** Accumulate confirmed fire into a ground map of everywhere fire has been seen. Bridges Stage 1 (per-frame masks) to Stage 2 (the fire area the predictor starts from).
+
+**How to build:**
+- Use `geo.GroundGrid` for the map. Row 0 is the **north** edge and rows count southward, like an image or a DEM, so a cell's north coordinate goes *down* as the row number goes up. A grid where north increases with the row index would flip the map.
+- Store the first-confirmed time in a float grid filled with **NaN** for "never". Don't use 0 to mean "unburned" in a time grid: a detection at t = 0 would vanish.
+- Keep a separate True/False **coverage** grid of cells that have been in view at least once. Scoring needs it.
+- Getting a frame's fire polygons onto the grid:
+  - **Flat ground:** georeference the polygon's vertices and rasterize the resulting ground polygon. A plane maps straight lines to straight lines, so this is exact.
+  - **Terrain:** that shortcut breaks, because a straight edge in the image lands on a curve over a hill. Fill each polygon into an image-space mask instead, then georeference the mask's pixels (subsampled, e.g. every 2nd pixel) or a densely sampled outline.
+- The same per-pixel georeferencing, run on a coarse sample of the whole frame, gives the frame's `in_view` grid.
+
+```python
+import numpy as np
+from embereye.geo import GroundGrid
+
+def points_to_grid(grid: GroundGrid, east_north: np.ndarray) -> np.ndarray:
+    """(N, 2) ground points (east, north) -> (rows, cols) True/False grid of the cells they fall in."""
+    rows, cols, on_grid = grid.cells_at(east_north[:, 0], east_north[:, 1])
+    marked = np.zeros(grid.shape, dtype=bool)
+    marked[rows[on_grid], cols[on_grid]] = True
+    return marked
 
 class FireMapper:
-    def __init__(self, cell_size=10, grid_extent=5000):
-        self.cell_size = cell_size  # meters
-        self.grid_extent = grid_extent  # meters from origin
-        self.grid_size = grid_extent // cell_size
-        
-        # Grid state: 0=unburned, timestamp=first detection time
-        self.fire_grid = np.zeros((self.grid_size, self.grid_size))
-        self.origin_lat = None
-        self.origin_lon = None
-        self.transformer = None
-    
-    def set_origin(self, lat, lon):
-        from pyproj import Transformer
-        self.origin_lat = lat
-        self.origin_lon = lon
-        self.transformer = Transformer.from_crs("EPSG:4326", "EPSG:32610", always_xy=True)
-        self.origin_x, self.origin_y = self.transformer.transform(lon, lat)
-    
-    def update(self, mask_polygons_gps, timestamp):
-        """Update grid with new georeferenced mask polygons."""
-        for poly_gps in mask_polygons_gps:
-            # Convert GPS polygon to grid coordinates
-            poly_xy = []
-            for lat, lon in poly_gps:
-                x, y = self.transformer.transform(lon, lat)
-                gx = int((x - self.origin_x) / self.cell_size + self.grid_size // 2)
-                gy = int((y - self.origin_y) / self.cell_size + self.grid_size // 2)
-                poly_xy.append((gx, gy))
-            
-            # Rasterize polygon to grid cells
-            if len(poly_xy) >= 3:
-                poly = Polygon(poly_xy)
-                minx, miny, maxx, maxy = [int(v) for v in poly.bounds]
-                for gx in range(max(0, minx), min(self.grid_size, maxx + 1)):
-                    for gy in range(max(0, miny), min(self.grid_size, maxy + 1)):
-                        if poly.contains(box(gx, gy, gx + 1, gy + 1).centroid):
-                            if self.fire_grid[gy, gx] == 0:
-                                self.fire_grid[gy, gx] = timestamp
-    
-    def get_perimeter(self):
-        """Return current fire perimeter as list of (lat, lon) points."""
-        burning = self.fire_grid > 0
-        # Extract contour and convert back to GPS
-        # (simplified: return bounding cells)
-        coords = np.argwhere(burning)
-        if len(coords) == 0:
-            return []
-        
-        perimeter_gps = []
-        for gy, gx in coords:
-            x = self.origin_x + (gx - self.grid_size // 2) * self.cell_size
-            y = self.origin_y + (gy - self.grid_size // 2) * self.cell_size
-            lon, lat = self.transformer.transform(x, y, direction='INVERSE')
-            perimeter_gps.append((lat, lon))
-        
-        return perimeter_gps
-    
-    def get_burning_cells(self):
-        """Return grid coordinates of all burning cells for Stage 2."""
-        return np.argwhere(self.fire_grid > 0)
+    def __init__(self, grid: GroundGrid):
+        self.grid = grid
+        self.first_confirmed_min = np.full(grid.shape, np.nan)   # minutes; NaN = never confirmed burning
+        self.covered = np.zeros(grid.shape, dtype=bool)           # in view at least once
+
+    def update(self, in_view, confirmed, time_min):
+        """in_view: this frame's coverage grid; confirmed: TemporalFilter output."""
+        self.covered |= in_view
+        new = confirmed & np.isnan(self.first_confirmed_min)
+        self.first_confirmed_min[new] = time_min
+
+    def ever_burned(self) -> np.ndarray:
+        """True for every cell confirmed burning at least once. Stage 2 starts from this."""
+        return ~np.isnan(self.first_confirmed_min)
 ```
+
+How the Mapper is scored against the simulator is defined under **Scoring** in System-Level Validation.
 
 **Hardware:** CPU only
 
@@ -255,12 +202,15 @@ class FireMapper:
 
 ### 5. Alerter
 
-**Purpose:** Sends notifications when fire is confirmed by the Temporal Filter.
+**Purpose:** Sends notifications when fire is confirmed, once per fire region.
+
+**Where `fire_id` comes from:** with no object tracker, a "fire" is a connected region of the Fire Mapper's confirmed grid (`cv2.connectedComponents`). A region keeps its ID from one update to the next when it overlaps a region from the previous update: it takes the ID of the old region it overlaps most, and when two old regions merge, the older ID wins. A region that overlaps nothing gets a new ID.
 
 **How to build:**
 - Twilio for SMS (`twilio` Python SDK)
 - Firebase Cloud Messaging or Pushover for push notifications
 - Rate limiting: one alert per fire region per N minutes
+- Load credentials from environment variables, never from code: the repo is public.
 
 ```python
 from twilio.rest import Client
@@ -300,53 +250,36 @@ class Alerter:
 
 ### 1. Terrain Analyzer
 
-**Purpose:** Pulls elevation data and calculates slope angle and aspect. Required by both GeoRef (terrain intersection) and Spread Predictor (fire behavior).
+**Purpose:** Elevation, slope and aspect for the area. GeoRef needs elevation (terrain intersection); the Spread Predictor needs slope and aspect.
 
-**How to build:**
-- Fetch DEM tiles from USGS 3DEP (10m resolution)
-- Calculate slope and aspect
-- Provide elevation lookup for GeoRef
+**Already built:** `Terrain(elevation, cell_size_m)` in `prediction/terrain.py` computes slope and aspect on a grid in **metres**, with row 0 at the north edge. What's left is loading a real DEM into it.
+
+**Reproject first.** USGS 3DEP 1/3 arc-second DEMs are stored in geographic coordinates (degrees, NAD83). Their pixel size, `transform[0]`, is about 9.3e-5 **degrees**, not metres, so using it as the cell size in `np.gradient` gives wrong slopes everywhere. Reproject to the local UTM zone (the one `geo.LocalFrame` picks) on a metre grid first:
 
 ```python
-import rasterio
 import numpy as np
+import rasterio
+from rasterio.warp import Resampling, calculate_default_transform, reproject
+from embereye.prediction.terrain import Terrain
 
-class TerrainAnalyzer:
-    def __init__(self, dem_path):
-        self.dem = rasterio.open(dem_path)
-        self.elevation = self.dem.read(1)
-        self.transform = self.dem.transform
-        self.cell_size = self.transform[0]  # meters per pixel
-        
-        # Calculate slope and aspect
-        dy, dx = np.gradient(self.elevation, self.cell_size)
-        self.slope = np.degrees(np.arctan(np.sqrt(dx**2 + dy**2)))
-        self.aspect = np.degrees(np.arctan2(-dx, dy)) % 360  # 0=N, 90=E, 180=S, 270=W
-    
-    def get_elevation(self, lat, lon):
-        row, col = self.dem.index(lon, lat)
-        if 0 <= row < self.elevation.shape[0] and 0 <= col < self.elevation.shape[1]:
-            return float(self.elevation[row, col])
-        return None
-    
-    def get_slope(self, lat, lon):
-        row, col = self.dem.index(lon, lat)
-        if 0 <= row < self.slope.shape[0] and 0 <= col < self.slope.shape[1]:
-            return float(self.slope[row, col])
-        return 0.0
-    
-    def get_aspect(self, lat, lon):
-        row, col = self.dem.index(lon, lat)
-        if 0 <= row < self.aspect.shape[0] and 0 <= col < self.aspect.shape[1]:
-            return float(self.aspect[row, col])
-        return 0.0
-    
-    def get_slope_grid(self, bounds):
-        """Return slope array for a bounding box."""
-        # bounds: (min_lon, min_lat, max_lon, max_lat)
-        pass
-
+def load_dem(path, utm_epsg, cell_size_m=10.0):
+    """Read a DEM, reproject it onto a UTM grid in metres, and wrap it as a Terrain."""
+    dst_crs = f"EPSG:{utm_epsg}"
+    with rasterio.open(path) as src:
+        transform, width, height = calculate_default_transform(
+            src.crs, dst_crs, src.width, src.height, *src.bounds, resolution=cell_size_m
+        )
+        elevation = np.empty((height, width), dtype=np.float32)
+        reproject(
+            source=rasterio.band(src, 1), destination=elevation,
+            src_transform=src.transform, src_crs=src.crs,
+            dst_transform=transform, dst_crs=dst_crs,
+            resampling=Resampling.bilinear,
+        )
+    return Terrain(elevation, cell_size_m), transform
 ```
+
+TODO: handle nodata cells, and crop/align the result to the project's `GroundGrid`.
 
 **Data sources:**
 - USGS 3DEP: https://elevation.nationalmap.gov/
@@ -358,63 +291,55 @@ class TerrainAnalyzer:
 
 ### 2. Weather Integrator
 
-**Purpose:** Fetches real-time weather. Returns structured data with correct keys and parsed values.
+**Purpose:** Fetches current weather and turns it into the `Weather` inputs the spread model takes (`prediction/spread.py`).
 
 **How to build:**
-- NOAA/NWS API for US coverage (free)
-- Parse string values ("10 mph", "NW") into numbers
-- Wind direction: convert compass to degrees; note NWS reports where wind comes FROM
+- NOAA/NWS API for US coverage (free). It **requires a `User-Agent` header** that identifies the app and a contact.
+- Parse string values ("10 mph", "NW") into numbers.
+- NWS reports where the wind comes FROM; the model wants where it blows TO.
+- Spread depends on **midflame** wind (at flame height), which is much slower than the forecast wind because vegetation shelters it. Convert with a wind adjustment factor (WAF), typically 0.1 under closed canopy to 0.6 in open grass.
+- TODO: confirm the measurement height of the NWS forecast wind before applying the WAF. NWS gridded forecasts document it as the 10 m (33 ft) wind; US fire-behaviour tables use the 20 ft wind, roughly the 10 m wind divided by 1.15.
 
 ```python
-import requests
 import re
+import requests
+from embereye.prediction.spread import Weather
 
-class WeatherIntegrator:
-    COMPASS_TO_DEG = {
-        'N': 0, 'NNE': 22.5, 'NE': 45, 'ENE': 67.5,
-        'E': 90, 'ESE': 112.5, 'SE': 135, 'SSE': 157.5,
-        'S': 180, 'SSW': 202.5, 'SW': 225, 'WSW': 247.5,
-        'W': 270, 'WNW': 292.5, 'NW': 315, 'NNW': 337.5
-    }
-    
-    def get_weather(self, lat, lon):
-        point = requests.get(f"https://api.weather.gov/points/{lat},{lon}").json()
-        forecast_url = point["properties"]["forecastHourly"]
-        
-        forecast = requests.get(forecast_url).json()
-        current = forecast["properties"]["periods"][0]
-        
-        # Parse wind speed (e.g., "10 mph" or "5 to 10 mph")
-        wind_str = current["windSpeed"]
-        wind_match = re.search(r'(\d+)\s*(?:to\s*(\d+))?\s*mph', wind_str, re.I)
-        if wind_match:
-            wind_speed = int(wind_match.group(2) or wind_match.group(1))
-        else:
-            wind_speed = 0
-        
-        # Parse wind direction (where wind comes FROM)
-        wind_dir_str = current["windDirection"]
-        wind_from_deg = self.COMPASS_TO_DEG.get(wind_dir_str, 0)
-        # Convert to where wind is GOING (for spread calculation)
-        wind_to_deg = (wind_from_deg + 180) % 360
-        
-        # Temperature and humidity
-        temp_f = current["temperature"]
-        humidity = current.get("relativeHumidity", {}).get("value", 30)
-        
-        # Dead fuel moisture (simplified Nelson model)
-        # Moisture DECREASES with temperature, INCREASES with humidity
-        fuel_moisture = 2.0 + 0.3 * humidity - 0.1 * (temp_f - 70)
-        fuel_moisture = max(2, min(30, fuel_moisture))
-        
-        return {
-            "wind_speed": wind_speed,  # mph
-            "wind_from_deg": wind_from_deg,  # where wind comes from
-            "wind_to_deg": wind_to_deg,  # where wind pushes fire
-            "temperature": temp_f,  # Fahrenheit
-            "humidity": humidity,  # percent
-            "fuel_moisture": fuel_moisture  # percent
-        }
+HEADERS = {"User-Agent": "EmberEye capstone (TODO(Will): contact email)"}
+
+COMPASS_TO_DEG = {
+    'N': 0, 'NNE': 22.5, 'NE': 45, 'ENE': 67.5,
+    'E': 90, 'ESE': 112.5, 'SE': 135, 'SSE': 157.5,
+    'S': 180, 'SSW': 202.5, 'SW': 225, 'WSW': 247.5,
+    'W': 270, 'WNW': 292.5, 'NW': 315, 'NNW': 337.5,
+}
+
+def get_weather(lat, lon, wind_adjustment_factor=0.4) -> Weather:
+    point = requests.get(f"https://api.weather.gov/points/{lat},{lon}", headers=HEADERS, timeout=10).json()
+    forecast = requests.get(point["properties"]["forecastHourly"], headers=HEADERS, timeout=10).json()
+    current = forecast["properties"]["periods"][0]
+
+    # "10 mph" or "5 to 10 mph". Taking the top of a range is a deliberate,
+    # conservative choice: it errs towards faster spread.
+    match = re.search(r"(\d+)\s*(?:to\s*(\d+))?\s*mph", current["windSpeed"], re.I)
+    forecast_wind_mph = int(match.group(2) or match.group(1)) if match else 0
+
+    # TODO: choose the adjustment factor per fuel/canopy instead of one value.
+    midflame_wind_mph = forecast_wind_mph * wind_adjustment_factor
+
+    wind_from_deg = COMPASS_TO_DEG.get(current["windDirection"], 0.0)
+
+    temp_f = current["temperature"]
+    humidity = (current.get("relativeHumidity") or {}).get("value", 30)
+    # Placeholder rule, not a published fuel-moisture model: drier when hot,
+    # damper when humid. TODO: replace with a real dead-fuel-moisture model.
+    fuel_moisture = max(2, min(30, 2.0 + 0.3 * humidity - 0.1 * (temp_f - 70)))
+
+    return Weather(
+        wind_speed_mph=midflame_wind_mph,
+        wind_to_deg=(wind_from_deg + 180) % 360,
+        fuel_moisture_pct=fuel_moisture,
+    )
 ```
 
 **Data sources:**
@@ -427,52 +352,33 @@ class WeatherIntegrator:
 
 ### 3. Fuel Mapper
 
-**Purpose:** Identifies vegetation type and assigns burn characteristics.
+**Purpose:** The fuel type of every grid cell, as the integer codes `SpreadPredictor` expects.
 
 **How to build:**
-- Load LANDFIRE fuel model rasters
-- Map fuel codes to spread parameters (with units)
+- Download LANDFIRE's **FBFM13** product (the 13 Anderson fuel models). Not FBFM40: its codes run from 91 to 204, and `SpreadPredictor` raises `Unknown fuel codes` on them.
+- FBFM13 marks non-burnable ground with codes 91, 92, 93, 98 and 99 (urban, snow/ice, agriculture, water, barren). The model only knows 99, so map all five to `NON_BURNABLE` (99) when loading.
+- Reproject and align to the `GroundGrid` like the DEM, but with nearest-neighbour resampling: codes are categories, so they must never be averaged.
+
+The spread rates live in `FUEL_MODELS` in `prediction/spread.py`: each fuel's base rate of spread in m/min **on flat ground with no wind**. They are uncalibrated placeholders, not published fuel-model values, so real-world predictions made with them are illustrative only.
 
 ```python
-import rasterio
+import numpy as np
+from embereye.prediction.spread import FUEL_MODELS, NON_BURNABLE
 
-# Anderson 13 fuel models with rate of spread in m/min under reference conditions
-# (mid-flame wind 2 m/s, slope 0, fuel moisture 8%)
-FUEL_MODELS = {
-    1: {"name": "short_grass", "ros_ref": 2.5, "heat_kj_m2": 700},
-    2: {"name": "timber_grass", "ros_ref": 1.8, "heat_kj_m2": 900},
-    3: {"name": "tall_grass", "ros_ref": 4.5, "heat_kj_m2": 500},
-    4: {"name": "chaparral", "ros_ref": 4.0, "heat_kj_m2": 2500},
-    5: {"name": "brush", "ros_ref": 1.0, "heat_kj_m2": 700},
-    6: {"name": "dormant_brush", "ros_ref": 1.5, "heat_kj_m2": 600},
-    7: {"name": "southern_rough", "ros_ref": 1.2, "heat_kj_m2": 800},
-    8: {"name": "timber_litter", "ros_ref": 0.3, "heat_kj_m2": 400},
-    9: {"name": "hardwood_litter", "ros_ref": 0.5, "heat_kj_m2": 500},
-    10: {"name": "timber_understory", "ros_ref": 2.0, "heat_kj_m2": 2800},
-    11: {"name": "light_slash", "ros_ref": 1.5, "heat_kj_m2": 1200},
-    12: {"name": "medium_slash", "ros_ref": 2.5, "heat_kj_m2": 1800},
-    13: {"name": "heavy_slash", "ros_ref": 3.5, "heat_kj_m2": 2500},
-}
+LANDFIRE_NON_BURNABLE = [91, 92, 93, 98, 99]
 
-class FuelMapper:
-    def __init__(self, landfire_path):
-        self.raster = rasterio.open(landfire_path)
-        self.data = self.raster.read(1)
-    
-    def get_fuel(self, lat, lon):
-        row, col = self.raster.index(lon, lat)
-        if 0 <= row < self.data.shape[0] and 0 <= col < self.data.shape[1]:
-            code = int(self.data[row, col])
-            return FUEL_MODELS.get(code, FUEL_MODELS[1])
-        return FUEL_MODELS[1]
-    
-    def get_fuel_grid(self, grid_coords, transform_func):
-        """Return fuel parameters for each grid cell."""
-        pass
+def to_model_codes(landfire_codes: np.ndarray) -> np.ndarray:
+    """LANDFIRE FBFM13 codes -> the codes SpreadPredictor accepts."""
+    codes = landfire_codes.astype(int).copy()
+    codes[np.isin(codes, LANDFIRE_NON_BURNABLE)] = NON_BURNABLE
+    unknown = set(np.unique(codes).tolist()) - set(FUEL_MODELS)
+    if unknown:
+        raise ValueError(f"Unexpected fuel codes (nodata?): {sorted(unknown)}")
+    return codes
 ```
 
 **Data sources:**
-- LANDFIRE: https://landfire.gov/
+- LANDFIRE: https://landfire.gov/ (FBFM13)
 
 **Hardware:** Storage for fuel rasters (~100MB per 100km²), CPU only
 
@@ -480,141 +386,20 @@ class FuelMapper:
 
 ### 4. Spread Predictor
 
-**Purpose:** Simulates fire spread using arrival-time algorithm (not step-based cellular automata). Outputs predicted perimeters at specified times.
+**Built:** `SpreadPredictor` in `prediction/spread.py`. It computes an **arrival time** for every cell (when the fire front reaches it) with Dijkstra's shortest-path algorithm: moving into a neighbouring cell takes distance ÷ spread rate minutes, and the fire reaches each cell by its quickest route. The spread rate is the fuel's base rate times factors for wind, slope and moisture. A 500×500 grid takes about 0.6 s on a laptop.
 
-**Approach:** Dijkstra-style shortest-path where edge weight = travel time = distance / spread rate. Fixes speed-cap and cumulative-step bugs in naive CA approach.
+**Using it:**
+- `set_ignition(cells, start_time_min=now)` seeds the fire (from the Fire Mapper); `predict([1, 3, 6])` then returns burned-area grids for **1, 3 and 6 hours after now**. "Now" defaults to the latest ignition time; pass `now_min=` to override it.
+- `arrival_time` and `burned_at(t)` use the same absolute clock, in minutes.
+- The simulator uses this same class as its ground-truth fire.
 
-**Key physics (simplified, not full Rothermel):**
-- Wind effect: exponential with alignment to spread direction
-- Slope effect: uphill accelerates (preheating), downhill decelerates; use aspect to determine direction
-- Moisture effect: dampens spread rate
-
-```python
-import numpy as np
-import heapq
-
-class SpreadPredictor:
-    def __init__(self, terrain, fuel_grid, weather, cell_size=30):
-        """
-        terrain: TerrainAnalyzer instance or (elevation, slope, aspect) arrays
-        fuel_grid: 2D array of fuel model dicts
-        weather: dict with wind_speed, wind_to_deg, fuel_moisture
-        cell_size: meters per grid cell
-        """
-        self.slope = terrain.slope if hasattr(terrain, 'slope') else terrain[1]
-        self.aspect = terrain.aspect if hasattr(terrain, 'aspect') else terrain[2]
-        self.fuel = fuel_grid
-        self.weather = weather
-        self.cell_size = cell_size
-        
-        self.rows, self.cols = self.slope.shape
-        # Arrival time: inf = not yet reached
-        self.arrival_time = np.full((self.rows, self.cols), np.inf)
-    
-    def set_ignition(self, burning_cells, start_time=0):
-        """Set initial fire cells from Fire Mapper output."""
-        for row, col in burning_cells:
-            if 0 <= row < self.rows and 0 <= col < self.cols:
-                self.arrival_time[row, col] = start_time
-    
-    def calc_spread_rate(self, from_row, from_col, to_row, to_col):
-        """Calculate spread rate in m/min from one cell to neighbor."""
-        # Direction of spread
-        dr = to_row - from_row
-        dc = to_col - from_col
-        spread_dir = np.degrees(np.arctan2(dc, -dr)) % 360  # 0=N
-        
-        # Fuel at destination
-        fuel = self.fuel[to_row, to_col]
-        base_ros = fuel.get("ros_ref", 1.0)  # m/min
-        
-        # Wind factor
-        # wind_to_deg is where wind pushes fire
-        wind_alignment = np.cos(np.radians(self.weather["wind_to_deg"] - spread_dir))
-        wind_speed = self.weather["wind_speed"] * 0.447  # mph to m/s
-        if wind_alignment > 0:
-            wind_factor = 1 + 0.5 * (wind_speed ** 1.2) * wind_alignment
-        else:
-            wind_factor = 1 / (1 + 0.3 * wind_speed * abs(wind_alignment))
-        
-        # Slope factor
-        slope_deg = self.slope[to_row, to_col]
-        aspect_deg = self.aspect[to_row, to_col]
-        
-        # Check if spreading uphill or downhill
-        # aspect = direction of DOWNslope; spreading opposite to aspect = uphill
-        uphill_alignment = np.cos(np.radians(aspect_deg - spread_dir + 180))
-        
-        if uphill_alignment > 0:
-            # Uphill: accelerate (preheating effect)
-            slope_factor = 1 + 5.275 * (np.tan(np.radians(slope_deg)) ** 2) * uphill_alignment
-        else:
-            # Downhill: decelerate
-            slope_factor = 1 / (1 + 2.0 * np.tan(np.radians(slope_deg)) * abs(uphill_alignment))
-        
-        # Moisture factor (fuel_moisture in percent)
-        moisture = self.weather.get("fuel_moisture", 8)
-        moisture_factor = max(0.1, 1 - (moisture - 8) / 25)
-        
-        ros = base_ros * wind_factor * slope_factor * moisture_factor
-        return max(0.01, ros)  # minimum spread rate
-    
-    def propagate(self):
-        """Run Dijkstra to compute arrival times at all cells."""
-        # Priority queue: (arrival_time, row, col)
-        pq = []
-        for row in range(self.rows):
-            for col in range(self.cols):
-                if self.arrival_time[row, col] < np.inf:
-                    heapq.heappush(pq, (self.arrival_time[row, col], row, col))
-        
-        # 8 neighbors
-        neighbors = [(-1, 0), (1, 0), (0, -1), (0, 1),
-                     (-1, -1), (-1, 1), (1, -1), (1, 1)]
-        
-        while pq:
-            t, row, col = heapq.heappop(pq)
-            
-            if t > self.arrival_time[row, col]:
-                continue  # already processed with shorter time
-            
-            for dr, dc in neighbors:
-                nr, nc = row + dr, col + dc
-                
-                # Bounds check
-                if not (0 <= nr < self.rows and 0 <= nc < self.cols):
-                    continue
-                
-                # Travel time to neighbor
-                dist = self.cell_size * (1.414 if (dr and dc) else 1.0)
-                ros = self.calc_spread_rate(row, col, nr, nc)
-                travel_time = dist / ros  # minutes
-                
-                new_arrival = t + travel_time
-                
-                if new_arrival < self.arrival_time[nr, nc]:
-                    self.arrival_time[nr, nc] = new_arrival
-                    heapq.heappush(pq, (new_arrival, nr, nc))
-    
-    def get_perimeter_at(self, time_minutes):
-        """Return cells that have burned by given time."""
-        burned = self.arrival_time <= time_minutes
-        return np.argwhere(burned)
-    
-    def predict(self, hours_list=[1, 3, 6]):
-        """Return predicted perimeters at specified hours."""
-        self.propagate()
-        
-        predictions = {}
-        for h in hours_list:
-            minutes = h * 60
-            cells = self.get_perimeter_at(minutes)
-            predictions[f"{h}hr"] = cells.tolist()
-        
-        return predictions
-```
-
-**Hardware:** CPU — Dijkstra on a 500×500 grid runs in seconds
+**Known limitations** (for the thesis):
+- **Grid directions.** Fire can only move to the 8 neighbouring cells, so paths in between zig-zag. Arrival times come out up to 8.2% too late, worst at about 22.5° off the grid axes, and a calm fire grows as an octagon. A 16-neighbour stencil would reduce this.
+- **Slope** uses the destination cell's slope and aspect, not the actual rise between the two cells.
+- **Uphill speed-up is understated.** The `5.275·tan²(slope)` term is Rothermel's slope factor without its packing-ratio term (β^-0.3, which is greater than 1 for real fuel beds).
+- **No moisture of extinction.** The moisture factor bottoms out at 0.1 rather than stopping the fire, so very wet fuel still burns, slowly.
+- **Wind multipliers** for a head fire (spreading straight downwind) are about 2.3× at 5 mph, 4.0× at 10, 7.9× at 20 and 12.3× at 30 mph. They come from the formula, not from measurements.
+- **Fuel rates** are uncalibrated placeholders (see Fuel Mapper).
 
 **Validation:**
 - Benchmark against Next Day Wildfire Spread dataset (1km/day resolution)
@@ -625,7 +410,7 @@ class SpreadPredictor:
 
 ## Stage 3: Suppression Support (Future Work)
 
-*[Stage 3 content unchanged — see previous version]*
+*Condensed. The full Stage 3 write-up (why autonomous suppression fails, retardant chemistry, use cases, hardware costs, research questions) is in git history: `git show 6b36535:docs/ARCHITECTURE.md`.*
 
 ### Core Concept
 
@@ -656,10 +441,10 @@ Stage 3 does not attempt autonomous fire suppression. Instead, it uses Stage 2's
 **Dataset:** FLAME 2 fire/smoke imagery
 
 **Protocol:**
-1. Generate training labels from thermal thresholding
+1. Generate training masks from the thermal frames with the palette-aware method (see Detector)
 2. Train YOLO11-seg on RGB frames with thermal-derived masks
 3. Hand-label separate test set (~300 frames) to avoid circular evaluation
-4. Split by sequence (not random) to prevent data leakage
+4. Split into contiguous frame blocks (not random) to prevent data leakage
 
 **Experiments:**
 | Model | Input | Expected finding |
@@ -670,13 +455,13 @@ Stage 3 does not attempt autonomous fire suppression. Instead, it uses Stage 2's
 
 **Metrics:** mAP@50, mAP@50:95, precision, recall per class
 
-**Note:** Smoke class requires separate hand-labeling (thermal thresholding only finds heat).
+**Note:** Smoke class requires separate hand-labeling (thermal masks only find heat). The `smoke` flag in FLAME 2's `labels.txt` means "smoke fills at least 50% of the RGB frame", not "smoke present", so it can't serve as a smoke label either.
 
 ---
 
 ### System-Level Validation (Stages 1-2)
 
-**Platform:** MuJoCo simulation with scripted camera path (no SITL initially)
+**Platform:** MuJoCo simulation with scripted camera path (no SITL initially). Built: `src/embereye/sim/`.
 
 **Sim setup:**
 - Run Spread Predictor as ground truth fire
@@ -684,15 +469,25 @@ Stage 3 does not attempt autonomous fire suppression. Instead, it uses Stage 2's
 - Detect with MuJoCo segmentation mask (not YOLO) for system testing
 - Exact camera pose available for georeferencing ground truth
 
+**Scale:** one MuJoCo box per grid cell renders a 640×480 frame in about 27 ms at 80×80 cells and 80 ms at 160×160 (measured on the development laptop). A 500×500 grid would be 250,000 boxes; it hasn't been tried and is unlikely to be practical. Bigger grids should switch to a MuJoCo heightfield with a texture for the RGB view, and get cell IDs by ray casting instead of segmentation.
+
 **What to measure:**
 | Metric | Method |
 |--------|--------|
-| Fire Mapper accuracy | IoU between mapped perimeter and ground truth grid |
-| GeoRef error | Distance from projected point to known ground truth |
+| Fire Mapper accuracy | IoU between mapped area and ground truth grid (see Scoring) |
+| GeoRef error | Distance from projected point to known ground truth (see Scoring) |
 | Alert latency | Time from first visible fire to alert |
 | Prediction accuracy | Run predictor with **wrong** wind/fuel; compare to truth |
 
 **Why scripted camera:** "Flight path execution accuracy" measures autopilot, not EmberEye. Save SITL for later integration.
+
+#### Scoring
+
+- **Truth.** The sim's truth grid (`SimObservation.truth_state`) has three states: UNBURNED, BURNING and BURNED (burned out).
+- **Fire Mapper, primary score: "ever burned".** Fire polygons are outer outlines (OpenCV `RETR_EXTERNAL`), so burned-out centres get filled in, and the Mapper builds up its map over time. Its main output is therefore "ever seen burning", scored by IoU against `truth_state != UNBURNED` at the same timestamp.
+- **Coverage.** Score IoU only over cells that have been in view at least once (the Mapper's coverage grid), and report coverage separately, so a cell nobody looked at doesn't count as a miss.
+- **Active front (optional, secondary).** IoU against `truth_state == BURNING`. This needs its own Mapper output, e.g. cells seen burning in the last K minutes.
+- **GeoRef error.** For sampled pixels, the distance in metres between the georeferenced point and the true ground point. The truth comes from `SimObservation.cell_ids` (which cell the pixel shows) located exactly by the same ray/terrain intersection. Report the mean and the 95th percentile.
 
 ---
 
@@ -713,19 +508,19 @@ Stage 3 does not attempt autonomous fire suppression. Instead, it uses Stage 2's
 | Component | Purpose | Key Libraries |
 |-----------|---------|---------------|
 | Detector | Segment fire/smoke in frames | ultralytics (yolo11-seg) |
-| Temporal Filter | Confirm detections over N frames | numpy, shapely |
-| GeoRef | Pixel → GPS with gimbal + terrain | numpy, pyproj, rasterio |
-| Fire Mapper | Accumulate detections into ground grid | numpy, shapely |
-| Alerter | Send notifications | twilio, requests |
+| GeoRef | Pixel → ground point (camera ray + terrain) | numpy, pyproj (via `geo.LocalFrame`) |
+| Temporal Filter | Confirm fire per ground cell (N of last M views) | numpy |
+| Fire Mapper | Accumulate confirmed fire into the ground grid | numpy (`geo.GroundGrid`) |
+| Alerter | Notify once per fire region | twilio, requests, opencv (regions) |
 
 ### Stage 2: Prediction
 
 | Component | Purpose | Key Libraries |
 |-----------|---------|---------------|
-| Terrain Analyzer | Elevation, slope, aspect | rasterio, numpy |
+| Terrain Analyzer | Elevation, slope, aspect (`prediction/terrain.py` built; DEM loading to do) | rasterio (reprojection), numpy |
 | Weather Integrator | Wind, temp, humidity, fuel moisture | requests |
-| Fuel Mapper | Vegetation type → spread params | rasterio |
-| Spread Predictor | Arrival-time fire propagation | numpy, heapq |
+| Fuel Mapper | LANDFIRE FBFM13 codes → model fuel codes | rasterio |
+| Spread Predictor | Arrival-time fire propagation (`prediction/spread.py`, built) | numpy, heapq |
 
 ### Shared
 
@@ -738,7 +533,7 @@ Stage 3 does not attempt autonomous fire suppression. Instead, it uses Stage 2's
 
 ## Suggested Build Order
 
-1. **Sim adapter** — Spread Predictor fire on ground grid, scripted MuJoCo camera, exact pose
+1. ✅ **Sim adapter** — Spread Predictor fire on ground grid, scripted MuJoCo camera, exact pose (done: `src/embereye/sim/`, `adapters/sim.py`)
 2. **GeoRef + Fire Mapper** — Score against sim ground truth
 3. **Arrival-time predictor** — Test with wrong wind/fuel vs ground truth
 4. **FLAME 2 detector** — Parallel track; independent of sim

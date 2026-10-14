@@ -29,7 +29,7 @@ recorded footage, without needing a drone in the air every day.
 ## Repository layout
 
 ```
-embereye/
+EmberEye/
 ├── docs/
 │   ├── ARCHITECTURE.md             # Three-stage system design
 │   └── PARTS_LIST.md               # Hardware budget for prototype
@@ -38,28 +38,28 @@ embereye/
 │   │   ├── base.py                 # Adapter interface — all others inherit this
 │   │   ├── recorded.py             # Read pre-recorded flights (dev + reproducibility)
 │   │   ├── sim.py                  # Simulated drone over a simulated fire (MuJoCo)
-│   │   ├── rpi_custom.py           # Our physical prototype (later)
-│   │   └── dji.py                  # Stub for DJI SDK (later)
-│   ├── pipeline/                   # The actual data science
-│   │   ├── detector.py             # Object detection (RGB) + hotspot detection (thermal)
-│   │   ├── fusion.py               # Combine RGB + thermal detections
-│   │   ├── georef.py               # Pixel coordinates → real-world coordinates
-│   │   ├── tracker.py              # Link detections across frames
-│   │   └── fire_model.py           # Perimeter + spread prediction
-│   ├── prediction/                 # Fire spread model + terrain
+│   │   ├── rpi_custom.py           # Our physical prototype (planned)
+│   │   └── dji.py                  # DJI SDK adapter (planned)
+│   ├── pipeline/                   # Stage 1: detection
+│   │   ├── detector.py             # YOLO11-seg fire masks (planned)
+│   │   ├── georef.py               # Pixel → ground point: camera ray + terrain (planned)
+│   │   ├── temporal_filter.py      # Confirm fire per ground cell (planned)
+│   │   ├── fire_mapper.py          # Ground map of confirmed fire (planned)
+│   │   └── alerter.py              # One alert per fire region (planned)
+│   ├── prediction/                 # Stage 2
+│   │   ├── terrain.py              # Elevation → slope and aspect
+│   │   └── spread.py               # Arrival-time fire spread model
 │   ├── sim/                        # MuJoCo fire simulator (ground truth for testing)
 │   ├── geo.py                      # GPS <-> local metres, ground grid
-│   ├── models/                     # Domain types shared by everything
-│   │   └── types.py                # Frame, Detection, Track, etc.
-│   ├── dashboard/                  # Web UI backend (FastAPI)
-│   │   └── server.py
+│   ├── models/
+│   │   └── types.py                # Frame, Detection, etc.
+│   ├── dashboard/                  # Web UI backend, FastAPI (planned)
 │   └── run.py                      # Entry point — wires an adapter to the pipeline
-├── data/
-│   ├── recordings/                 # Recorded flights for dev/testing
-│   ├── models/                     # Trained ML model weights
-│   └── annotations/                # Labeled datasets
-├── tests/                          # Unit tests for each pipeline stage
-└── notebooks/                      # Exploratory analysis, model training notebooks
+├── data/                           # Not in git
+│   ├── flame2/                     # FLAME 2 dataset
+│   └── sim/                        # Simulator output
+├── tests/                          # Unit tests
+└── notebooks/                      # Exploratory analysis, labelling, training
 ```
 
 ---

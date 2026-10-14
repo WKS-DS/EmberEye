@@ -3,7 +3,7 @@
 **Project:** EmberEye: Aerial Thermal Situational Awareness for Wildland Fire Response
 **Author:** William [Last Name]
 **Date:** [insert]
-**Estimated total:** $780 (base) / $1,200 (recommended)
+**Estimated total:** $950 (base) / $1,220 (recommended)
 
 ---
 
@@ -22,16 +22,16 @@ keep them.
 
 ---
 
-## Base build (~$780)
+## Base build (~$950)
 
 | # | Component | Purpose | Est. cost | Notes |
 |---|-----------|---------|-----------|-------|
 | 1 | **Holybro X500 V2 ARF Kit (PX4)** | Airframe, motors, ESCs, Pixhawk 6C flight controller, GPS, telemetry radio, power module | $400 | Educational-grade open-source drone platform |
-| 2 | **Raspberry Pi 5 (8GB) + case + 128GB microSD** | Onboard AI compute for real-time inference | $120 | Runs YOLO models at ~1–3 fps |
+| 2 | **Raspberry Pi 5 (8GB) + case + 128GB microSD** | Onboard AI compute for real-time inference | $120 | Runs YOLO models at ~1–3 fps. TODO(Will): reconcile Pi 5 vs Jetson Orin Nano (`docs/ARCHITECTURE.md` plans a Jetson) |
 | 3 | **FLIR Lepton 2.5 + PureThermal Mini Pro breakout** | Thermal imaging sensor (80×60 radiometric) | $200 | Actual temperature readings, not just relative heat |
 | 4 | **Raspberry Pi Camera Module 3** | RGB visible-light imaging | $35 | 12MP, autofocus, wide-angle available |
 | 5 | **3S 5200mAh LiPo batteries (×3)** | Flight power | $75 | Two for rotation, one spare |
-| 6 | **RadioMaster Pocket ELRS transmitter + receiver** | Manual flight control (safety fallback) | $75 | Legally required for BVLOS training |
+| 6 | **RadioMaster Pocket ELRS transmitter + receiver** | Manual flight control (safety fallback) | $75 | Lets a pilot take over manually during test flights |
 | 7 | **XT60 connectors, mounting hardware, misc** | Assembly | $30 | Screws, standoffs, zip ties, cables |
 | 8 | **Propellers (spare set)** | Consumables | $15 | Break-and-replace |
 |   | **BASE SUBTOTAL** | | **$950** | |
@@ -53,12 +53,12 @@ keep them.
 All software components are open-source or free-tier for students:
 
 - **PyTorch** (model training and inference)
-- **Ultralytics YOLOv11** (pretrained detection models, Apache 2.0 license)
+- **Ultralytics YOLO11** (pretrained detection and segmentation models)
 - **OpenCV** (thermal image processing)
 - **FastAPI + PostgreSQL/PostGIS** (backend, spatial data)
 - **React + Leaflet** (dashboard, mapping)
 - **PX4 + MAVSDK-Python** (drone control and telemetry)
-- **Gazebo Garden / PX4 SITL** (physics simulation for Semester 1 development)
+- **MuJoCo** (simulated drone camera over a simulated fire, for Semester 1 development; PX4 SITL is a possible later integration)
 - **Roboflow (free tier)** (dataset management)
 - **Weights & Biases (student tier)** (experiment tracking)
 
@@ -80,8 +80,8 @@ All software components are open-source or free-tier for students:
 
 ## Test site plan
 
-Semester 1 development uses simulated environments (PX4 SITL) and public
-datasets. Semester 2 field validation is planned through partnership with
+Semester 1 development uses a MuJoCo fire simulator (PX4 SITL possibly
+later) and public datasets. Semester 2 field validation is planned through partnership with
 either Spokane County Fire District, Washington DNR, or a local wildland
 fire training facility — no additional cost anticipated. Backup: any
 outdoor location with a legal small controlled heat source (propane
