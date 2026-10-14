@@ -48,7 +48,10 @@ EmberEye/
 │   │   ├── world.py    # MuJoCo scene: ground tiles + camera
 │   │   ├── fire_sim.py # FireSim, Scenario, SimObservation
 │   │   └── record.py   # Save a simulated flight to disk
+│   ├── data/
+│   │   └── flame2.py   # FLAME 2 labels, palette detection, hot masks, YOLO-seg lines
 │   ├── geo.py          # LocalFrame (GPS <-> metres), GroundGrid
+│   ├── masks.py        # mask -> outline polygons (shared by sim and labelling)
 │   ├── pipeline/       # Detection pipeline (WIP)
 │   └── run.py          # Entry point
 ├── notebooks/
@@ -58,8 +61,12 @@ EmberEye/
 │   ├── flame2/         # FLAME 2 dataset (not in git)
 │   │   ├── frames/     # 53,451 RGB + thermal pairs
 │   │   └── labels.txt  # Fire/smoke labels
+│   │   └── audit/      # Output of scripts/audit_flame2_labels.py
 │   └── sim/            # Simulator output (not in git)
+├── scripts/
+│   └── audit_flame2_labels.py  # Evidence for reviewing the labelling method
 ├── tests/
+│   ├── test_flame2.py
 │   ├── test_geo.py
 │   ├── test_recorded.py
 │   ├── test_sim.py
@@ -137,6 +144,9 @@ python -m embereye.run --adapter sim --duration 120
 
 # Save a simulated flight (frames, masks, poses, preview.mp4) to data/sim/demo/
 python -m embereye.sim.record --out data/sim/demo
+
+# Audit the FLAME 2 labelling method (reads the dataset, writes data/flame2/audit/)
+python scripts/audit_flame2_labels.py
 
 # Run tests
 pytest

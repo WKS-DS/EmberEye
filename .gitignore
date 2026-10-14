@@ -1,5 +1,6 @@
-# Large data files (FLAME 2 dataset, recordings, model weights)
-data/
+# Large data files (FLAME 2 dataset, recordings, model weights). The leading / means
+# only the top-level data/ folder, not the src/embereye/data/ package.
+/data/
 
 # Python
 __pycache__/
