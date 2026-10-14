@@ -8,18 +8,21 @@ EmberEye detects wildfires from UAV footage by fusing RGB and thermal imagery. T
 
 **Owner:** Will Scott (wkscott715@gmail.com)  
 **GitHub:** https://github.com/WKS-DS/EmberEye  
-**Status:** Phase 1 — Detector Development
+**Status:** Phase 1 — detector development (labelling under review) and simulation proof of concept (sim adapter done)
 
 ## Architecture
 
 ```
-DroneAdapter (async frame source)
+DroneAdapter (async frame source: recorded, sim, later a real drone)
     ↓
-Pipeline
-    ├── Detector (YOLOv11 fire/smoke detection)
-    ├── Tracker (multi-frame object tracking)
-    ├── GeoRef (pixel coords → lat/lon)
-    └── Alerter (fire notifications)
+Stage 1 pipeline
+    ├── Detector (YOLO11-seg fire masks)
+    ├── GeoRef (pixel → ground point: camera ray + terrain)
+    ├── Temporal Filter (confirm fire per ground cell, N of last M views)
+    ├── Fire Mapper (ground map of confirmed fire)
+    └── Alerter (one alert per fire region)
+    ↓
+Stage 2: Spread Predictor (prediction/)
     ↓
 Dashboard (FastAPI + web UI)
 ```
@@ -57,6 +60,10 @@ EmberEye/
 │   │   └── labels.txt  # Fire/smoke labels
 │   └── sim/            # Simulator output (not in git)
 ├── tests/
+│   ├── test_geo.py
+│   ├── test_recorded.py
+│   ├── test_sim.py
+│   └── test_spread.py
 ├── docs/
 │   ├── ARCHITECTURE.md
 │   └── PARTS_LIST.md
@@ -77,9 +84,9 @@ EmberEye/
 
 1. ✅ Dataset downloaded (FLAME 2 — 53,451 frame pairs)
 2. ✅ Labels parsed (39,751 fire frames, 13,700 no-fire)
-3. ✅ Thermal thresholding pipeline built
-4. 🔄 Generate YOLO bounding box annotations
-5. ⬜ Train YOLOv11 on annotated data
+3. ⚠️ Thermal thresholding pipeline built (notebook 02), but it only works before the palette change at about frame 17,000; being replaced
+4. 🔄 Generate YOLO11-seg polygon labels from palette-aware thermal masks (under review before any full-dataset export)
+5. ⬜ Train YOLO11-seg on annotated data
 6. ⬜ Integrate detector into pipeline
 
 ### Simulation Proof of Concept
@@ -95,14 +102,9 @@ How the sim works: `FireSim.run()` yields a `SimObservation` per frame with the 
 
 ### Annotation Strategy
 
-FLAME 2 has frame-level labels (Fire/NoFire), not bounding boxes. We generate pseudo-labels by thresholding the thermal channel:
+FLAME 2 has frame-level labels (Fire/NoFire), not masks, so masks are generated from the thermal frames. A fixed grayscale threshold does **not** work: the thermal frames are false-colour JPEGs, the palette switches from an inferno-style one to rainbow/magenta ones at about frame 17,000, and the colours appear to be rescaled every frame. After the switch, almost no pixel passes the old threshold of 200.
 
-```python
-# Threshold=180 works well
-gray = cv2.cvtColor(thermal, cv2.COLOR_BGR2GRAY)
-_, binary = cv2.threshold(gray, 180, 255, cv2.THRESH_BINARY)
-contours, _ = cv2.findContours(binary, cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_SIMPLE)
-```
+The labelling logic lives in `src/embereye/data/flame2.py` (palette detection, per-palette hot-region masks, YOLO-seg export), so notebooks call it instead of re-implementing it. See `docs/ARCHITECTURE.md` (Detector → Training data strategy).
 
 ## Git Workflow
 
@@ -155,10 +157,12 @@ Core (now):
 - numpy, opencv-python, pytest
 - mujoco (fire simulator), pyproj (GPS <-> metres)
 
+Notebooks:
+- pandas, matplotlib, Pillow
+
 Coming soon:
 - ultralytics (YOLO11)
 - torch
-- shapely (Fire Mapper)
 - fastapi, uvicorn (dashboard)
 
 ## Notes for Claude Code
@@ -166,4 +170,4 @@ Coming soon:
 - Prefer explicit over clever code
 - Always update this file when project structure changes
 - Commit work at logical stopping points
-- Test on fire frame 13701+ and no-fire frame 1-13700 for quick validation
+- For quick checks, use frames from both sides of the thermal palette change at about frame 17,000 (e.g. 15000 and 30000) plus a no-fire frame from 1–13700. Labelling behaves completely differently on each side.
