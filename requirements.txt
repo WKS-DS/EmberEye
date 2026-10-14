@@ -1,5 +1,9 @@
 # Semester 1, weeks 1-4: minimal deps to run the recorded-footage adapter.
 # Add more as we build new pipeline stages.
+#
+# This file is THE dependency list. pyproject.toml only describes the
+# package (name, Python version, where the code lives), so `pip install -e .`
+# does not install these — run `pip install -r requirements.txt` as well.
 
 # Core
 numpy>=1.26
@@ -7,9 +11,14 @@ opencv-python>=4.9
 mujoco>=3.1                # fire simulator (rendering + segmentation)
 pyproj>=3.6                # geo transforms (GPS <-> metres)
 
+# Notebooks
+pandas>=2.0
+matplotlib>=3.8
+Pillow>=10.0
+
 # Later (uncomment as we build):
 # torch>=2.2               # ML
-# ultralytics>=8.2         # YOLOv11 for detection
+# ultralytics>=8.2         # YOLO11 segmentation (detector)
 # fastapi>=0.110           # dashboard API
 # uvicorn[standard]>=0.29  # ASGI server
 # pydantic>=2.6            # network validation
