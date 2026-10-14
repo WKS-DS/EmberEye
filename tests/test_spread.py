@@ -90,15 +90,36 @@ def test_ignition_skips_cells_that_cannot_burn():
     assert ignited == 1
 
 
-def test_predict_horizons_are_measured_from_time_zero():
+def test_predict_horizons_for_a_fire_ignited_at_time_zero():
     predictor, _ = make_predictor(rows=61, cols=61, cell_size_m=30.0, fuel=8)
     predictions = predictor.predict([1, 3])
 
     assert set(predictions) == {"1hr", "3hr"}
+    assert np.array_equal(predictions["1hr"], predictor.burned_at(60))
     assert np.array_equal(predictions["3hr"], predictor.burned_at(180))
     # Everything burned after 1 hour is still burned after 3, and more besides.
     assert predictions["3hr"][predictions["1hr"]].all()
     assert predictions["3hr"].sum() > predictions["1hr"].sum()
+
+
+def test_predict_horizons_are_relative_to_latest_ignition():
+    """Step 3 seeds the predictor from the Fire Mapper at the current time,
+    so "1hr" must mean one hour after that, not one hour after t=0."""
+    predictor = SpreadPredictor(Terrain.flat(41, 41, 10.0), np.full((41, 41), GRASS), Weather(5, 90))
+    predictor.set_ignition([(20, 20)], start_time_min=120)
+    predictions = predictor.predict([1, 3])
+
+    assert predictions["1hr"].sum() > 0
+    assert np.array_equal(predictions["1hr"], predictor.burned_at(180))
+    assert np.array_equal(predictions["3hr"], predictor.burned_at(300))
+
+    # An explicit now_min overrides the default.
+    later = predictor.predict([1], now_min=150)
+    assert np.array_equal(later["1hr"], predictor.burned_at(210))
+
+    # reset() forgets the ignition time as well as the fire.
+    predictor.reset()
+    assert predictor.latest_ignition_min is None
 
 
 def test_bad_inputs_are_rejected():

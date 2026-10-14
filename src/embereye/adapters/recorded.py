@@ -19,14 +19,14 @@ Companion file layout for a "flight":
         rgb.mp4                 # visible-light video
         thermal.mp4  (optional) # thermal video, radiometric preferred
         telemetry.json          # per-frame GPS, altitude, gimbal, etc.
-        metadata.json           # fov_deg, camera params, sensor types
+        metadata.json           # fov_deg, camera params, sensor types, start_ts
 """
 
 from __future__ import annotations
 
 import asyncio
 import json
-from datetime import datetime, timezone
+from datetime import datetime, timedelta, timezone
 from pathlib import Path
 from typing import AsyncIterator, Optional
 
@@ -56,6 +56,7 @@ class RecordedFootageAdapter(DroneAdapter):
         self._thermal_cap:  Optional[cv2.VideoCapture] = None
         self._telemetry:    list[dict]                 = []
         self._metadata:     dict                       = {}
+        self._start_ts:     Optional[datetime]         = None
 
     # ---------------------------------------------------------------- setup
     async def connect(self) -> None:
@@ -66,6 +67,14 @@ class RecordedFootageAdapter(DroneAdapter):
         meta_path = self.recording_dir / "metadata.json"
         if meta_path.exists():
             self._metadata = json.loads(meta_path.read_text())
+
+        # When the recording started. Frames whose telemetry has no "ts"
+        # are timestamped from this plus their position in the stream.
+        # Chosen once here, so every frame shares the same starting point.
+        if "start_ts" in self._metadata:
+            self._start_ts = datetime.fromisoformat(self._metadata["start_ts"])
+        else:
+            self._start_ts = datetime.now(timezone.utc)
 
         # Telemetry — per-frame drone state, indexed by frame number.
         # Optional; if missing, telemetry fields on Frame will be None.
@@ -105,22 +114,40 @@ class RecordedFootageAdapter(DroneAdapter):
         native_dt  = 1.0 / source_fps
         target_dt  = 1.0 / self.playback_fps if self.playback_fps else 0.0
 
+        # Two counters, because looping makes them differ:
+        # - frame_idx: position within the recording (0, 1, 2, ... restarting
+        #   at 0 on every loop). Telemetry is looked up with this.
+        # - emitted:   frames handed out since streaming began, never reset.
+        #   Frame ids and computed timestamps use this, so they keep
+        #   increasing across loops.
         frame_idx = 0
+        emitted = 0
+        loops_done = 0
+        frames_per_loop = 0
         while True:
+            # Note: read() is a blocking call, so it holds up the event loop
+            # while it decodes. It could later move to asyncio.to_thread().
             ok, rgb = self._rgb_cap.read()
             if not ok:
-                if self.loop:
+                if self.loop and frame_idx > 0:      # frame_idx == 0 means an empty video: nothing to loop
                     self._rgb_cap.set(cv2.CAP_PROP_POS_FRAMES, 0)
                     if self._thermal_cap is not None:
                         self._thermal_cap.set(cv2.CAP_PROP_POS_FRAMES, 0)
+                    frames_per_loop = frame_idx
+                    loops_done += 1
                     frame_idx = 0
                     continue
                 return
 
+            # How far later than the first pass this loop is, in seconds.
+            # Added to timestamps that come from telemetry, which repeat
+            # every loop.
+            loop_offset_s = loops_done * frames_per_loop * native_dt
+
             # OpenCV returns BGR — convert to RGB so downstream code doesn't
             # have to remember what colorspace this is.
             rgb = cv2.cvtColor(rgb, cv2.COLOR_BGR2RGB)
-            yield self._build_frame(rgb, SensorType.RGB, frame_idx, native_dt)
+            yield self._build_frame(rgb, SensorType.RGB, frame_idx, emitted, native_dt, loop_offset_s)
 
             if self._thermal_cap is not None:
                 ok_t, thermal = self._thermal_cap.read()
@@ -130,9 +157,10 @@ class RecordedFootageAdapter(DroneAdapter):
                     # be decoded per platform — a job for the platform-specific
                     # adapter, not this one.
                     thermal_gray = cv2.cvtColor(thermal, cv2.COLOR_BGR2GRAY).astype(np.float32)
-                    yield self._build_frame(thermal_gray, SensorType.THERMAL, frame_idx, native_dt)
+                    yield self._build_frame(thermal_gray, SensorType.THERMAL, frame_idx, emitted, native_dt, loop_offset_s)
 
             frame_idx += 1
+            emitted += 1
             if target_dt > 0:
                 await asyncio.sleep(target_dt)
 
@@ -142,9 +170,16 @@ class RecordedFootageAdapter(DroneAdapter):
         image: np.ndarray,
         sensor: SensorType,
         frame_idx: int,
+        emitted: int,
         native_dt: float,
+        loop_offset_s: float,
     ) -> Frame:
-        """Assemble a Frame with telemetry looked up by frame index."""
+        """Assemble a Frame with telemetry looked up by frame index.
+
+        frame_idx:     position within the recording (selects the telemetry row)
+        emitted:       frames emitted so far across all loops (id and timestamp)
+        loop_offset_s: seconds to add to telemetry timestamps on repeat loops
+        """
         telem_row = self._telemetry[frame_idx] if frame_idx < len(self._telemetry) else {}
 
         position = None
@@ -163,12 +198,13 @@ class RecordedFootageAdapter(DroneAdapter):
             battery_pct=telem_row.get("battery_pct"),
         )
 
-        # Timestamp: if telemetry has one, use it. Otherwise reconstruct from
-        # frame index and native fps.
+        # Timestamp: if telemetry has one, use it (shifted along on repeat
+        # loops). Otherwise rebuild it from the recording's start time and
+        # how many frames have gone by at the video's native frame rate.
         if "ts" in telem_row:
-            ts = datetime.fromisoformat(telem_row["ts"])
+            ts = datetime.fromisoformat(telem_row["ts"]) + timedelta(seconds=loop_offset_s)
         else:
-            ts = datetime.now(timezone.utc)  # good enough for dev; real recordings should include timestamps
+            ts = self._start_ts + timedelta(seconds=emitted * native_dt)
 
         return Frame(
             ts=ts,
@@ -176,5 +212,5 @@ class RecordedFootageAdapter(DroneAdapter):
             image=image,
             telemetry=telemetry,
             fov_deg=self._metadata.get(f"{sensor.value}_fov_deg"),
-            frame_id=f"{frame_idx:08d}",
+            frame_id=f"{emitted:08d}",
         )
