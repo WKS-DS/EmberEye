@@ -35,7 +35,7 @@ from __future__ import annotations
 import heapq
 import math
 from dataclasses import dataclass
-from typing import Iterable, Sequence
+from typing import Iterable, Optional, Sequence
 
 import numpy as np
 
@@ -104,12 +104,15 @@ class Weather:
 class SpreadPredictor:
     """Arrival-time fire spread on a grid.
 
-    Typical use:
+    Typical use, starting from what the Fire Mapper has seen burning
+    `now_min` minutes into the incident:
 
         predictor = SpreadPredictor(terrain, fuel_codes, weather)
-        predictor.set_ignition([(40, 25)])
-        predictor.propagate()
-        burned_after_1h = predictor.burned_at(60)
+        predictor.set_ignition(burning_cells, start_time_min=now_min)
+        forecast = predictor.predict([1, 3, 6])   # 1, 3 and 6 hours after now_min
+
+    All times are minutes on one clock. `arrival_time` and `burned_at()`
+    use that clock directly; `predict()` counts its horizons from "now".
     """
 
     def __init__(self, terrain: Terrain, fuel_codes: np.ndarray, weather: Weather) -> None:
@@ -136,6 +139,11 @@ class SpreadPredictor:
         # Minutes after ignition at which fire reaches each cell.
         # Infinity means "not reached".
         self.arrival_time = np.full(terrain.shape, np.inf)
+
+        # The latest start_time_min passed to set_ignition(), i.e. the
+        # moment the fire was last observed. predict() measures from here.
+        # None until something has been ignited.
+        self.latest_ignition_min: Optional[float] = None
 
         # Wind, slope and fuel do not change during a run, so the time to
         # cross into every cell from each of the 8 directions can be worked
@@ -186,6 +194,7 @@ class SpreadPredictor:
     def reset(self) -> None:
         """Forget all ignitions and arrival times."""
         self.arrival_time[:] = np.inf
+        self.latest_ignition_min = None
 
     def set_ignition(self, burning_cells: Iterable[Sequence[int]], start_time_min: float = 0.0) -> int:
         """Mark cells as already on fire at `start_time_min`.
@@ -202,6 +211,10 @@ class SpreadPredictor:
                 continue
             self.arrival_time[row, col] = min(self.arrival_time[row, col], start_time_min)
             ignited += 1
+
+        if ignited > 0 and math.isfinite(start_time_min):
+            if self.latest_ignition_min is None or start_time_min > self.latest_ignition_min:
+                self.latest_ignition_min = start_time_min
         return ignited
 
     # ------------------------------------------------------------ propagation
@@ -246,11 +259,18 @@ class SpreadPredictor:
         """True/False grid: has the fire reached each cell by `time_min`?"""
         return self.arrival_time <= time_min
 
-    def predict(self, hours_list: Sequence[float] = (1, 3, 6)) -> dict[str, np.ndarray]:
+    def predict(
+        self,
+        hours_list: Sequence[float] = (1, 3, 6),
+        now_min: Optional[float] = None,
+    ) -> dict[str, np.ndarray]:
         """Burned-area grids at several times ahead, e.g. {"1hr": ..., "3hr": ...}.
 
-        Every horizon is measured from time zero, so "3hr" really is three
-        hours after ignition.
+        Every horizon is measured from `now_min`, so "1hr" means one hour
+        after now. If `now_min` is not given, "now" is the latest ignition
+        time passed to set_ignition() (0 for a fire ignited at time zero).
         """
+        if now_min is None:
+            now_min = self.latest_ignition_min if self.latest_ignition_min is not None else 0.0
         self.propagate()
-        return {f"{hours:g}hr": self.burned_at(hours * 60) for hours in hours_list}
+        return {f"{hours:g}hr": self.burned_at(now_min + hours * 60) for hours in hours_list}

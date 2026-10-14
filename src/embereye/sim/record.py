@@ -70,17 +70,24 @@ def draw_preview(sim: FireSim, obs: SimObservation) -> np.ndarray:
     cv2.putText(view, label, (8, 20), cv2.FONT_HERSHEY_SIMPLEX, 0.5, (255, 255, 255), 1, cv2.LINE_AA)
 
     # --- Right: the true state of the ground seen from directly above,
-    # north at the top, enlarged to the same height as the camera frame.
+    # north at the top. The map is scaled to fit a square panel as tall as
+    # the camera frame, keeping the grid's shape, and centred with dark
+    # padding on the short side.
+    px_per_m = height / max(grid.width_m, grid.height_m)
+    map_w = max(1, int(round(grid.width_m * px_per_m)))
+    map_h = max(1, int(round(grid.height_m * px_per_m)))
+    pad_x = (height - map_w) // 2
+    pad_y = (height - map_h) // 2
+
     tile_rgb = (sim.tile_colors(obs.truth_state, obs.time_s) * 255).astype(np.uint8)
-    top_down = cv2.cvtColor(tile_rgb, cv2.COLOR_RGB2BGR)
-    top_down = cv2.resize(top_down, (height, height), interpolation=cv2.INTER_NEAREST)
+    ground = cv2.resize(cv2.cvtColor(tile_rgb, cv2.COLOR_RGB2BGR), (map_w, map_h), interpolation=cv2.INTER_NEAREST)
+    top_down = np.full((height, height, 3), 40, dtype=np.uint8)
+    top_down[pad_y:pad_y + map_h, pad_x:pad_x + map_w] = ground
 
     # Mark the drone and the direction it is looking.
-    px_per_m = height / max(grid.width_m, grid.height_m)
-
     def to_map_px(east_m: float, north_m: float) -> tuple[int, int]:
-        x = (east_m + grid.width_m / 2) * px_per_m
-        y = (grid.height_m / 2 - north_m) * px_per_m
+        x = pad_x + (east_m + grid.width_m / 2) * px_per_m
+        y = pad_y + (grid.height_m / 2 - north_m) * px_per_m
         return int(round(x)), int(round(y))
 
     heading = np.radians(obs.pose.heading_deg)

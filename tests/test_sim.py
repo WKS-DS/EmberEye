@@ -21,6 +21,7 @@ from embereye.prediction.spread import Weather
 from embereye.prediction.terrain import Terrain
 from embereye.sim.camera import CameraModel, OrbitPath, look_rotation
 from embereye.sim.fire_sim import BURNED, BURNING, UNBURNED, FireSim, Scenario, mask_to_polygons
+from embereye.sim.record import draw_preview
 
 ROWS = COLS = 24
 CELL_M = 10.0
@@ -28,15 +29,15 @@ CAMERA = CameraModel(width=320, height=240, fov_v_deg=50.0)
 PATH = OrbitPath(radius_m=150.0, period_s=120.0, altitude_min_m=60.0, altitude_max_m=110.0, altitude_period_s=70.0)
 
 
-def make_scenario(terrain=None) -> Scenario:
+def make_scenario(terrain=None, rows=ROWS, cols=COLS, ignition=(14, 9)) -> Scenario:
     if terrain is None:
-        terrain = Terrain.flat(ROWS, COLS, CELL_M)
+        terrain = Terrain.flat(rows, cols, CELL_M)
     return Scenario(
-        grid=GroundGrid(ROWS, COLS, CELL_M),
+        grid=GroundGrid(rows, cols, CELL_M),
         terrain=terrain,
-        fuel_codes=np.full((ROWS, COLS), 1),
+        fuel_codes=np.full((rows, cols), 1),
         weather=Weather(wind_speed_mph=5.0, wind_to_deg=45.0),
-        ignition_cells=[(14, 9)],
+        ignition_cells=[ignition],
         local_frame=LocalFrame(origin_lat=47.6588, origin_lon=-117.4260, origin_alt_m=600.0),
         fire_age_at_start_min=8.0,
         burn_duration_min=5.0,
@@ -249,6 +250,19 @@ def test_no_fire_is_an_error():
     scenario.ignition_cells = [(999, 999)]      # off the grid
     with pytest.raises(ValueError, match="no fire"):
         FireSim(scenario, PATH, CAMERA)
+
+
+def test_preview_keeps_the_grid_shape_for_non_square_grids():
+    wide = make_scenario(rows=20, cols=40, ignition=(10, 20))
+    with FireSim(wide, PATH, CAMERA) as wide_sim:
+        preview = draw_preview(wide_sim, wide_sim.observe(10.0))
+
+    # Camera frame on the left, a square map panel as tall as it on the right.
+    assert preview.shape == (CAMERA.height, CAMERA.width + CAMERA.height, 3)
+    # The grid is 400 m wide and 200 m tall, so in the 240-pixel panel it is
+    # drawn 240 x 120 with padding above and below. Sample a padding pixel
+    # in the bottom-right corner, away from the labels and the drone marker.
+    assert (preview[-3, -3] == 40).all()
 
 
 # ---------------------------------------------------------------------------
