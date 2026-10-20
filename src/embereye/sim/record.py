@@ -3,6 +3,7 @@ record.py — Run the fire simulator and save what it produced to disk.
 
 Usage:
     python -m embereye.sim.record --out data/sim/demo
+    python -m embereye.sim.record --scenario hard --path lawnmower    # writes to data/sim/hard-lawnmower
 
 What gets written into the output folder:
 
@@ -29,8 +30,9 @@ from pathlib import Path
 import cv2
 import numpy as np
 
-from embereye.sim.camera import OrbitPath
-from embereye.sim.fire_sim import BURNING, FireSim, SimObservation, demo_scenario
+from embereye.sim.fire_sim import (
+    BURNING, PATHS, SCENARIOS, FireSim, SimObservation, demo_scenario, make_path, visible_burning_fraction,
+)
 
 PREVIEW_FPS = 10
 MAX_CELLS_IN_16_BIT_PNG = 65535     # largest value a 16-bit image can hold
@@ -143,6 +145,7 @@ def save_run(
             "fire_polygons":   [polygon.tolist() for polygon in obs.fire_polygons],
             "n_fire_pixels":   int(obs.fire_mask.sum()),
             "n_burning_cells": int((obs.truth_state == BURNING).sum()),
+            "visible_burning_fraction": visible_burning_fraction(obs),
         })
 
     if video is not None:
@@ -186,16 +189,32 @@ def save_run(
 
 def main() -> None:
     parser = argparse.ArgumentParser(description="Run the EmberEye fire simulator and save the frames")
-    parser.add_argument("--out",        type=Path,  default=Path("data/sim/demo"), help="Output folder")
+    parser.add_argument("--scenario",   choices=list(SCENARIOS), default="demo", help="Which simulated world")
+    parser.add_argument("--path",       choices=PATHS, default="orbit", help="Which flight path")
+    parser.add_argument("--out",        type=Path,  default=None,
+                        help="Output folder (default: data/sim/demo for the demo orbit, else data/sim/<scenario>-<path>)")
     parser.add_argument("--duration",   type=float, default=1200.0, help="Length of the simulated flight, in seconds")
     parser.add_argument("--interval",   type=float, default=5.0,    help="Simulated seconds between frames")
-    parser.add_argument("--terrain",    choices=["flat", "hill"], default="flat", help="Shape of the ground")
+    parser.add_argument("--terrain",    choices=["flat", "hill"], default=None, help="Shape of the ground (demo only; default flat)")
     parser.add_argument("--no-preview", action="store_true", help="Skip writing preview.mp4")
     args = parser.parse_args()
 
-    with FireSim(demo_scenario(args.terrain), OrbitPath()) as sim:
-        n = save_run(sim, args.out, args.duration, args.interval, preview=not args.no_preview)
-    print(f"Done. {n} frames written to {args.out}/")
+    if args.scenario == "demo":
+        scenario = demo_scenario(args.terrain or "flat")
+    elif args.terrain is not None:
+        parser.error("--terrain only applies to the demo scenario")
+    else:
+        scenario = SCENARIOS[args.scenario]()
+
+    # A separate default folder per scenario and path, so trying the new
+    # ones never overwrites the saved demo.
+    out = args.out
+    if out is None:
+        out = Path("data/sim/demo") if (args.scenario, args.path) == ("demo", "orbit") else Path(f"data/sim/{args.scenario}-{args.path}")
+
+    with FireSim(scenario, make_path(args.path, scenario.grid)) as sim:
+        n = save_run(sim, out, args.duration, args.interval, preview=not args.no_preview)
+    print(f"Done. {n} frames written to {out}/")
 
 
 if __name__ == "__main__":
