@@ -119,7 +119,6 @@ Coming soon:
 
 ## Notes for Claude Code
 
-- Will is learning Python — explain concepts when introducing new patterns
 - Prefer explicit over clever code
 - Always update this file when project structure changes
 - Commit work at logical stopping points
