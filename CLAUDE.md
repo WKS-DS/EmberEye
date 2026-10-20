@@ -7,19 +7,18 @@ Drone-based wildfire detection system using multi-sensor fusion (RGB + thermal).
 EmberEye detects wildfires from UAV footage by fusing RGB and thermal imagery. The system is designed to be drone-agnostic — any platform that can provide frames flows through the same pipeline.
 
 **Owner:** Will Scott (wkscott715@gmail.com)  
-**GitHub:** https://github.com/WKS-DS/EmberEye  
-**Status:** Phase 1 — detector development (labelling under review) and simulation proof of concept (sim adapter done)
+**GitHub:** https://github.com/WKS-DS/EmberEye
 
 ## Current status
 _Last updated: 2026-10-19_
 
 - **Branch:** review-fixes (not pushed). main = sim adapter, 3 commits not pushed. origin/main on GitHub = initial scaffold + 2 web edits from 2026-10-19 (not fetched here), so main and origin/main have diverged.
-- **Done:** review fixes Phases 0–3; Phase 4.1–4.3 (FLAME 2 labelling module + audit); Phase 5a scoring definition (added in Phase 2). 68 tests pass.
-- **Waiting on Will:** hand-check of thermal masks (48 frames). This blocks Phase 4.4 (block split + YOLO-seg export).
+- **Done:** review fixes Phases 0–3; Phase 4.1–4.3 (labelling module + audit); Phase 4 decisions (in `docs/ARCHITECTURE.md`, Detector → Labelling decisions); hand-check export (48 frames) + `scripts/score_handcheck.py`; Phase 5a scoring definition. 75 tests pass.
+- **Waiting on Will:** labelme masks for the 48 frames in `data/flame2/handcheck/`, then the scores. This blocks Phase 4.4 (block split + YOLO-seg export).
 - **Next for Claude Code:**
-  1. Phase 4 decisions (gate, hand-check export + scoring script, smoky-frame policy, scene-confound note). Will re-sends these.
-  2. Phase 5b: harder scenario + lawnmower path.
-  3. Workflow setup: pre-commit + gitleaks, CI, subagents, settings/hooks.
+  1. Phase 5b: harder scenario + lawnmower path.
+  2. Workflow setup: pre-commit + gitleaks, CI, subagents, settings/hooks. First fetch origin, show Will the two web commits, and rebase main onto origin/main with him.
+  3. Phase 4.4, only after Will sends the scores. Raise first: `mask_to_yolo_seg` loses ~0.14 IoU vs the raw mask (it drops regions by outline area under 20, and simplifies with epsilon 1.0).
   4. Build step 2: GeoRef + Fire Mapper. Include p90 latency metrics, a timestamped event log and GeoJSON output.
 - **Open decisions:** Pi 5 vs Jetson Orin Nano (TODO(Will) in `docs/PARTS_LIST.md` and `docs/ARCHITECTURE.md`); the repo URL mismatch (claude.ai project says `wkscott/EmberEye`, git remote is `WKS-DS/EmberEye`).
 
@@ -64,7 +63,7 @@ EmberEye/
 │   ├── data/
 │   │   └── flame2.py   # FLAME 2 labels, palette detection, hot masks, YOLO-seg lines
 │   ├── geo.py          # LocalFrame (GPS <-> metres), GroundGrid
-│   ├── masks.py        # mask -> outline polygons (shared by sim and labelling)
+│   ├── masks.py        # mask <-> outline polygons, IoU (shared by sim and labelling)
 │   ├── pipeline/       # Detection pipeline (WIP)
 │   └── run.py          # Entry point
 ├── notebooks/
@@ -73,14 +72,18 @@ EmberEye/
 ├── data/
 │   ├── flame2/         # FLAME 2 dataset (not in git)
 │   │   ├── frames/     # 53,451 RGB + thermal pairs
-│   │   └── labels.txt  # Fire/smoke labels
-│   │   └── audit/      # Output of scripts/audit_flame2_labels.py
+│   │   ├── labels.txt  # Fire/smoke labels
+│   │   ├── audit/      # Output of scripts/audit_flame2_labels.py
+│   │   └── handcheck/  # 48 thermal frames + manifest.csv + Will's labelme JSON
 │   └── sim/            # Simulator output (not in git)
 ├── scripts/
-│   └── audit_flame2_labels.py  # Evidence for reviewing the labelling method
+│   ├── audit_flame2_labels.py  # Evidence for reviewing the labelling method
+│   ├── export_handcheck.py     # Pick the hand-check frames (8 per stratum)
+│   └── score_handcheck.py      # IoU of hot_mask vs hand masks, per stratum
 ├── tests/
 │   ├── test_flame2.py
 │   ├── test_geo.py
+│   ├── test_masks.py
 │   ├── test_recorded.py
 │   ├── test_sim.py
 │   ├── test_spread.py
@@ -103,12 +106,10 @@ EmberEye/
 
 ### Detector Development (Phase 1)
 
-1. ✅ Dataset downloaded (FLAME 2 — 53,451 frame pairs)
-2. ✅ Labels parsed (39,751 fire frames, 13,700 no-fire)
-3. ⚠️ Thermal thresholding pipeline built (notebook 02), but it only works before the palette change at about frame 17,000; being replaced
-4. 🔄 Generate YOLO11-seg polygon labels from palette-aware thermal masks (under review before any full-dataset export)
-5. ⬜ Train YOLO11-seg on annotated data
-6. ⬜ Integrate detector into pipeline
+1. ✅ Dataset downloaded, labels parsed (53,451 frame pairs: 39,751 fire, 13,700 no-fire)
+2. 🔄 YOLO11-seg polygon labels from palette-aware thermal masks (hand-check, then export). Notebook 02's fixed threshold only works before frame ~17,000 and is being replaced.
+3. ⬜ Train YOLO11-seg on annotated data
+4. ⬜ Integrate detector into pipeline
 
 ### Simulation Proof of Concept
 
@@ -123,9 +124,7 @@ How the sim works: `FireSim.run()` yields a `SimObservation` per frame with the 
 
 ### Annotation Strategy
 
-FLAME 2 has frame-level labels (Fire/NoFire), not masks, so masks are generated from the thermal frames. A fixed grayscale threshold does **not** work: the thermal frames are false-colour JPEGs, the palette switches from an inferno-style one to rainbow/magenta ones at about frame 17,000, and the colours appear to be rescaled every frame. After the switch, almost no pixel passes the old threshold of 200.
-
-The labelling logic lives in `src/embereye/data/flame2.py` (palette detection, per-palette hot-region masks, YOLO-seg export), so notebooks call it instead of re-implementing it. See `docs/ARCHITECTURE.md` (Detector → Training data strategy).
+FLAME 2 has frame-level labels (Fire/NoFire), not masks, so masks are generated from the thermal frames. A fixed grayscale threshold does **not** work: the thermal frames are false-colour JPEGs, the palette switches from an inferno-style one to a rainbow one at about frame 17,000 (whose background is mostly dark red in some frames, magenta in others), and the colours appear to be rescaled every frame. The labelling logic lives in `src/embereye/data/flame2.py` (palette detection, per-palette hot-region masks, YOLO-seg export), so notebooks call it instead of re-implementing it. See `docs/ARCHITECTURE.md` (Detector → Training data strategy, Labelling decisions).
 
 ## Git Workflow
 

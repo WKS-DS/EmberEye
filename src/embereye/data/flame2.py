@@ -44,6 +44,10 @@ INFERNO = "inferno"
 RAINBOW = "rainbow"
 UNKNOWN = "unknown"
 
+# Rainbow frames split by background colour (see palette_variant).
+RAINBOW_RED = "rainbow-red"
+RAINBOW_MAGENTA = "rainbow-magenta"
+
 
 # ---------------------------------------------------------------------------
 # Labels and files
@@ -214,6 +218,28 @@ def detect_palette(thermal_bgr: np.ndarray, inferno_max_fit: float = 45.0) -> st
     if features["median_g"] < 20 and max(features["median_r"], features["median_b"]) > 60:
         return RAINBOW
     return UNKNOWN
+
+
+def palette_variant(thermal_bgr: np.ndarray, min_dark_red: float = 0.4) -> str:
+    """detect_palette(), with rainbow frames split by background colour:
+    "inferno", "rainbow-red", "rainbow-magenta" or "unknown".
+
+    It is the same rainbow palette either way. What differs is how much of
+    the frame sits at its dark-red cold end: in some frames most of the
+    ground is dark red, in others it is pink, magenta and violet (common
+    from about frame 41,000). hot_mask's per-frame threshold depends on
+    the frame's median, so the two are kept apart when checking masks.
+
+    A rainbow frame is "rainbow-red" when at least `min_dark_red` of its
+    pixels are the dark-red cold end (the `dark_red` feature). On every
+    25th fire frame, 0.4 put 99% of frames whose cold half is pure dark
+    red into "rainbow-red" and all frames whose cold half is clearly
+    magenta into "rainbow-magenta"; frames in between are a mix of both.
+    """
+    palette = detect_palette(thermal_bgr)
+    if palette != RAINBOW:
+        return palette
+    return RAINBOW_RED if palette_features(thermal_bgr)["dark_red"] >= min_dark_red else RAINBOW_MAGENTA
 
 
 # ---------------------------------------------------------------------------

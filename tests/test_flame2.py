@@ -132,6 +132,27 @@ def test_detect_palette_unknown_for_other_colours():
     assert f2.detect_palette(frame) == f2.UNKNOWN
 
 
+def rainbow_frame_with_dark_red_share(share: float) -> np.ndarray:
+    """A rainbow frame whose top `share` of rows is the dark-red cold end and
+    the rest magenta, with a hot square in the bottom corner."""
+    frame = np.zeros((SIZE, SIZE, 3), dtype=np.uint8)
+    frame[:] = rainbow_bgr(320, value=200).astype(np.uint8)
+    frame[:int(share * SIZE)] = RAINBOW_COLD.astype(np.uint8)
+    frame[50:60, 50:60] = rainbow_bgr(25).astype(np.uint8)
+    return frame
+
+
+def test_palette_variant_splits_rainbow_by_background():
+    assert f2.palette_variant(rainbow_frame_with_dark_red_share(0.7)) == f2.RAINBOW_RED
+    assert f2.palette_variant(rainbow_frame_with_dark_red_share(0.2)) == f2.RAINBOW_MAGENTA
+
+
+def test_palette_variant_leaves_other_palettes_alone():
+    inferno = frame_with_square(inferno_bgr(0.05), inferno_bgr(0.95))
+    assert f2.palette_variant(inferno) == f2.INFERNO
+    assert f2.palette_variant(np.full((SIZE, SIZE, 3), (40, 200, 40), dtype=np.uint8)) == f2.UNKNOWN
+
+
 # ---------------------------------------------------------------------------
 # Hot masks
 # ---------------------------------------------------------------------------

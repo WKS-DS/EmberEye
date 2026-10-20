@@ -31,3 +31,24 @@ def mask_to_polygons(mask: np.ndarray, min_area_px: float = 4.0) -> list[np.ndar
             continue
         polygons.append(contour.reshape(-1, 2).astype(np.float32))
     return polygons
+
+
+def polygons_to_mask(polygons: list[np.ndarray], shape: tuple[int, int]) -> np.ndarray:
+    """The reverse of mask_to_polygons: fill each (N, 2) pixel (x, y)
+    polygon into a True/False mask of the given (height, width).
+    Points are rounded to the nearest pixel."""
+    canvas = np.zeros(shape, dtype=np.uint8)
+    for polygon in polygons:
+        points = np.rint(np.asarray(polygon, dtype=np.float64)).astype(np.int32)
+        if len(points) >= 3:
+            cv2.fillPoly(canvas, [points.reshape(-1, 1, 2)], 1)
+    return canvas.astype(bool)
+
+
+def iou(a: np.ndarray, b: np.ndarray) -> float:
+    """Intersection over union of two True/False masks of the same shape.
+    Two empty masks agree completely, so their IoU is 1."""
+    union = np.logical_or(a, b).sum()
+    if union == 0:
+        return 1.0
+    return float(np.logical_and(a, b).sum() / union)
