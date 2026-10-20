@@ -11,6 +11,7 @@ Three ideas live here:
   testing georeferencing.
 - CameraPath:  a scripted flight. Ask it where the camera is at time t.
   OrbitPath circles a point while climbing and descending.
+  LawnmowerPath flies back-and-forth survey passes over a rectangle.
 
 Angle conventions (same as models/types.py):
 - heading: degrees clockwise from north. 0 = N, 90 = E.
@@ -221,3 +222,96 @@ class OrbitPath(CameraPath):
         pitch_deg = -math.degrees(math.atan2(up - self.target_up_m, self.radius_m))
 
         return PathPoint(east, north, up, heading_deg, pitch_deg)
+
+
+@dataclass
+class LawnmowerPath(CameraPath):
+    """Survey passes over a rectangle, like mowing a lawn.
+
+    The drone flies east along the southernmost pass, turns round on a
+    half-circle, flies west along the next pass `spacing_m` further north,
+    and so on. Altitude and camera pitch never change, and the camera
+    always faces the way the drone is flying.
+
+    After the last pass it flies the whole pattern again in reverse, and
+    keeps going back and forth, so the position never jumps.
+
+        pass 2   ------------------->        north
+                (                              ^
+        pass 1   <-------------------          |
+                                     )
+        pass 0   ------------------->   (starts at the west end)
+    """
+
+    width_m:        float = 1200.0      # length of each pass, east to west
+    spacing_m:      float = 300.0       # distance between neighbouring passes
+    n_passes:       int   = 5
+    altitude_m:     float = 200.0       # `up_m`: above the local datum
+    pitch_deg:      float = -60.0
+    speed_mps:      float = 10.0
+    center_east_m:  float = 0.0
+    center_north_m: float = 0.0
+
+    @property
+    def turn_radius_m(self) -> float:
+        return self.spacing_m / 2
+
+    @property
+    def pattern_length_m(self) -> float:
+        """Distance flown through all passes and the turns between them, once."""
+        turns = (self.n_passes - 1) * math.pi * self.turn_radius_m
+        return self.n_passes * self.width_m + turns
+
+    def at(self, time_s: float) -> PathPoint:
+        # How far along the pattern the drone is. Going out and back makes a
+        # cycle of twice the pattern; on the way back the distance counts down.
+        length = self.pattern_length_m
+        along = (self.speed_mps * time_s) % (2 * length)
+        reversed_ = along > length
+        if reversed_:
+            along = 2 * length - along
+
+        east, north, heading = self._point_along(along)
+        if reversed_:
+            heading += 180.0
+        return PathPoint(east, north, self.altitude_m, heading % 360.0, self.pitch_deg)
+
+    def _point_along(self, along: float) -> tuple[float, float, float]:
+        """(east, north, heading) at `along` metres into the forward pattern."""
+        west  = self.center_east_m - self.width_m / 2
+        east  = self.center_east_m + self.width_m / 2
+        south = self.center_north_m - (self.n_passes - 1) * self.spacing_m / 2
+        turn_length = math.pi * self.turn_radius_m
+
+        # Each pass is followed by a turn (except the last pass).
+        for i in range(self.n_passes):
+            pass_north = south + i * self.spacing_m
+            going_east = i % 2 == 0
+            if along <= self.width_m or i == self.n_passes - 1:
+                done = min(along, self.width_m)
+                if going_east:
+                    return west + done, pass_north, 90.0
+                return east - done, pass_north, 270.0
+            along -= self.width_m
+
+            if along <= turn_length:
+                # Half-circle round a centre level with the end of the pass,
+                # halfway to the next pass. `bearing` is the direction from
+                # that centre out to the drone; it sweeps from south (180)
+                # to north (0 or 360) round the outside of the rectangle.
+                fraction = along / turn_length
+                center_east = east if going_east else west
+                center_north = pass_north + self.turn_radius_m
+                if going_east:      # round the east side: bearing 180 -> 90 -> 0
+                    bearing = 180.0 - 180.0 * fraction
+                    heading = bearing - 90.0
+                else:               # round the west side: bearing 180 -> 270 -> 360
+                    bearing = 180.0 + 180.0 * fraction
+                    heading = bearing + 90.0
+                b = math.radians(bearing)
+                return (center_east + self.turn_radius_m * math.sin(b),
+                        center_north + self.turn_radius_m * math.cos(b),
+                        heading % 360.0)
+            along -= turn_length
+
+        raise AssertionError("unreachable: the last pass returns above")

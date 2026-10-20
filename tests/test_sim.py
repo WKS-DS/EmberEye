@@ -19,8 +19,11 @@ from embereye.geo import GroundGrid, LocalFrame
 from embereye.models.types import SensorType
 from embereye.prediction.spread import Weather
 from embereye.prediction.terrain import Terrain
-from embereye.sim.camera import CameraModel, OrbitPath, look_rotation
-from embereye.sim.fire_sim import BURNED, BURNING, UNBURNED, FireSim, Scenario, mask_to_polygons
+from embereye.sim.camera import CameraModel, LawnmowerPath, OrbitPath, look_rotation
+from embereye.sim.fire_sim import (
+    BURNED, BURNING, UNBURNED, FireSim, Scenario, demo_scenario, hard_scenario, make_path, mask_to_polygons,
+    visible_burning_fraction,
+)
 from embereye.sim.record import draw_preview
 
 ROWS = COLS = 24
@@ -83,6 +86,57 @@ def test_orbit_altitude_actually_varies():
     heights = [PATH.at(float(t)).up_m for t in np.linspace(0, PATH.altitude_period_s, 50)]
     assert min(heights) == pytest.approx(PATH.altitude_min_m, abs=1.0)
     assert max(heights) == pytest.approx(PATH.altitude_max_m, abs=1.0)
+
+
+MOWER = LawnmowerPath(width_m=600.0, spacing_m=200.0, n_passes=4, altitude_m=150.0, pitch_deg=-60.0, speed_mps=10.0)
+
+
+def test_lawnmower_keeps_altitude_and_pitch_and_stays_on_its_rectangle():
+    south = -(MOWER.n_passes - 1) * MOWER.spacing_m / 2
+    for time_s in np.linspace(0, 3 * MOWER.pattern_length_m / MOWER.speed_mps, 400):
+        point = MOWER.at(float(time_s))
+        assert point.up_m == MOWER.altitude_m
+        assert point.pitch_deg == MOWER.pitch_deg
+        # Turns bulge out past the ends of the passes by the turn radius.
+        assert abs(point.east_m) <= MOWER.width_m / 2 + MOWER.turn_radius_m + 1e-9
+        assert south - 1e-9 <= point.north_m <= -south + 1e-9
+
+
+def test_lawnmower_passes_alternate_direction():
+    south = -(MOWER.n_passes - 1) * MOWER.spacing_m / 2
+    leg = MOWER.width_m + np.pi * MOWER.turn_radius_m     # one pass plus the turn after it
+    for i in range(MOWER.n_passes):
+        point = MOWER.at((i * leg + MOWER.width_m / 2) / MOWER.speed_mps)    # middle of pass i
+        assert point.north_m == pytest.approx(south + i * MOWER.spacing_m)
+        assert point.east_m == pytest.approx(0.0, abs=1e-9)
+        assert point.heading_deg == pytest.approx(90.0 if i % 2 == 0 else 270.0)
+
+
+def test_lawnmower_moves_smoothly_in_the_direction_it_faces():
+    dt = 0.5
+    for time_s in np.arange(0, 2.2 * MOWER.pattern_length_m / MOWER.speed_mps, dt):
+        a, b = MOWER.at(float(time_s)), MOWER.at(float(time_s + dt))
+        step = np.hypot(b.east_m - a.east_m, b.north_m - a.north_m)
+        assert step <= MOWER.speed_mps * dt + 1e-6          # never jumps
+        if step < 0.5 * MOWER.speed_mps * dt:
+            continue                                         # straddles the end of the pattern, where it turns back
+        travel_deg = np.degrees(np.arctan2(b.east_m - a.east_m, b.north_m - a.north_m)) % 360
+        facing_deg = MOWER.at(float(time_s + dt / 2)).heading_deg
+        assert abs((travel_deg - facing_deg + 180) % 360 - 180) < 2.0
+
+
+def test_lawnmower_flies_the_pattern_back_in_reverse():
+    end_s = MOWER.pattern_length_m / MOWER.speed_mps
+    for offset_s in [5.0, 47.0, 120.0]:
+        out, back = MOWER.at(end_s - offset_s), MOWER.at(end_s + offset_s)
+        assert (back.east_m, back.north_m) == pytest.approx((out.east_m, out.north_m))
+        assert (back.heading_deg - out.heading_deg) % 360 == pytest.approx(180.0)
+
+
+def test_make_path_keeps_the_demo_orbit_unchanged():
+    assert make_path("orbit", demo_scenario().grid) == OrbitPath()
+    with pytest.raises(ValueError, match="Unknown path"):
+        make_path("zigzag", demo_scenario().grid)
 
 
 def test_project_and_pixel_rays_are_inverses(sim):
@@ -250,6 +304,57 @@ def test_no_fire_is_an_error():
     scenario.ignition_cells = [(999, 999)]      # off the grid
     with pytest.raises(ValueError, match="no fire"):
         FireSim(scenario, PATH, CAMERA)
+
+
+# ---------------------------------------------------------------------------
+# The hard scenario: fire that one frame can't take in
+# ---------------------------------------------------------------------------
+@pytest.fixture(scope="module")
+def hard_lap():
+    """The full-size hard scenario seen over one orbit lap, every 20 s."""
+    scenario = hard_scenario()
+    path = make_path("orbit", scenario.grid)
+    with FireSim(scenario, path, CAMERA) as hard_sim:
+        yield hard_sim, [hard_sim.observe(float(t)) for t in np.arange(0, path.period_s + 1, 20.0)]
+
+
+def test_hard_scenario_has_two_separate_fires(hard_lap):
+    hard_sim, observations = hard_lap
+    for obs in (observations[0], hard_sim.observe(1200.0)):
+        n_regions = cv2.connectedComponents((obs.truth_state != UNBURNED).astype(np.uint8))[0] - 1
+        assert n_regions == 2
+
+
+def test_hard_scenario_fire_is_often_partly_out_of_sight(hard_lap):
+    _, observations = hard_lap
+    fractions = np.array([visible_burning_fraction(obs) for obs in observations])
+    assert (fractions < 0.9).mean() >= 0.5
+
+
+def test_hill_hides_part_of_the_fire_from_part_of_the_orbit(hard_lap):
+    """Count burning cells whose centre is in the frame but whose pixel
+    shows ground at least 50 m nearer the camera: the hill is in the way.
+    (On flat ground this is always 0; a far-off cell that is merely smaller
+    than a pixel shows a neighbouring cell at about the same distance.)"""
+    hard_sim, observations = hard_lap
+    scenario = hard_sim.scenario
+    east, north = scenario.grid.cell_centers()
+    centers = np.column_stack([east.ravel(), north.ravel(), scenario.terrain.elevation.ravel()])
+
+    hidden_counts = []
+    for obs in observations:
+        burning = np.flatnonzero(obs.truth_state.ravel() == BURNING)
+        pixels, in_front = CAMERA.project(obs.pose, centers[burning])
+        x, y = np.rint(pixels[:, 0]).astype(int), np.rint(pixels[:, 1]).astype(int)
+        in_view = in_front & (x >= 0) & (x < CAMERA.width) & (y >= 0) & (y < CAMERA.height)
+
+        shown = obs.cell_ids[y[in_view], x[in_view]]
+        distance_burning = np.linalg.norm(centers[burning[in_view]] - obs.pose.position, axis=1)
+        distance_shown = np.where(shown >= 0, np.linalg.norm(centers[shown] - obs.pose.position, axis=1), np.inf)
+        hidden_counts.append(int((distance_shown < distance_burning - 50.0).sum()))
+
+    assert max(hidden_counts) > 100      # from some of the orbit, much of the fire is behind the hill
+    assert min(hidden_counts) == 0       # from elsewhere, none of it is
 
 
 def test_preview_keeps_the_grid_shape_for_non_square_grids():
