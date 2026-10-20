@@ -10,6 +10,19 @@ EmberEye detects wildfires from UAV footage by fusing RGB and thermal imagery. T
 **GitHub:** https://github.com/WKS-DS/EmberEye  
 **Status:** Phase 1 — detector development (labelling under review) and simulation proof of concept (sim adapter done)
 
+## Current status
+_Last updated: 2026-10-19_
+
+- **Branch:** review-fixes (not pushed). main = sim adapter, 3 commits not pushed. origin/main on GitHub = initial scaffold + 2 web edits from 2026-10-19 (not fetched here), so main and origin/main have diverged.
+- **Done:** review fixes Phases 0–3; Phase 4.1–4.3 (FLAME 2 labelling module + audit); Phase 5a scoring definition (added in Phase 2). 68 tests pass.
+- **Waiting on Will:** hand-check of thermal masks (48 frames). This blocks Phase 4.4 (block split + YOLO-seg export).
+- **Next for Claude Code:**
+  1. Phase 4 decisions (gate, hand-check export + scoring script, smoky-frame policy, scene-confound note). Will re-sends these.
+  2. Phase 5b: harder scenario + lawnmower path.
+  3. Workflow setup: pre-commit + gitleaks, CI, subagents, settings/hooks.
+  4. Build step 2: GeoRef + Fire Mapper. Include p90 latency metrics, a timestamped event log and GeoJSON output.
+- **Open decisions:** Pi 5 vs Jetson Orin Nano (TODO(Will) in `docs/PARTS_LIST.md` and `docs/ARCHITECTURE.md`); the repo URL mismatch (claude.ai project says `wkscott/EmberEye`, git remote is `WKS-DS/EmberEye`).
+
 ## Architecture
 
 ```
@@ -181,4 +194,5 @@ Coming soon:
 - Prefer explicit over clever code
 - Always update this file when project structure changes
 - Commit work at logical stopping points
+- Before ending a session, or after finishing a phase, update "Current status": change the date, move finished items to Done, and add new next steps. Keep it short. Detailed history belongs in git, not here.
 - For quick checks, use frames from both sides of the thermal palette change at about frame 17,000 (e.g. 15000 and 30000) plus a no-fire frame from 1–13700. Labelling behaves completely differently on each side.
