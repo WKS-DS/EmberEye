@@ -46,6 +46,13 @@ for result in results:
 - Hand-label a separate test set (~300 frames) to avoid circular evaluation
 - Split FLAME 2 into contiguous blocks of frames, not at random, so near-identical neighbouring frames never land in different splits. All no-fire frames are frames 1–13700 (before the burn), so validation and test each need a block from that range.
 
+**Labelling decisions (Phase 4, 2026-10-19):**
+- `labels.txt` is the frame-level truth. No-fire frames always get empty label files, whatever the mask says. Fire frames get `hot_mask` with the frame gate on (`max_frame_median=0.25`). A fire frame whose mask comes out empty, gated or not, is excluded from training and listed in the split report, never written as an empty label.
+- The gate's 4.4% rate on no-fire frames is **not** a false-positive figure: it was tuned and measured on inferno-palette frames of open grassland only.
+- Hand-check before any export: 48 thermal frames, 8 per stratum (palette variant inferno / rainbow-red / rainbow-magenta × smoke flag YY / YN), picked by `scripts/export_handcheck.py` and scored by `scripts/score_handcheck.py`. Go: mean IoU ≥ 0.5 in every stratum. A stratum below that gets parameter tuning or has its frames dropped from training labels.
+- Smoky frames (YY: smoke fills ≥50% of the RGB frame): the RGB baseline trains on YN fire frames only (14,316) plus the no-fire frames; adding YY is an ablation run. Validation and test report YY and YN as separate groups. The thermal-only experiment uses all fire frames. The split JSON records each frame's YY/YN flag and palette variant.
+- Scene confound: every no-fire frame is open grassland and sky (before the burn), while fire frames are forest. Image-level false-positive rates on FLAME 2's no-fire frames are therefore not evidence that the detector avoids false alarms in forest. TODO(Will): add forest no-fire negatives from another dataset (e.g. FLAME 1's No_Fire set).
+
 **Hardware:**
 - On-drone (edge): NVIDIA Jetson Orin Nano (~$500) — runs YOLO11 at 15-30 FPS. TODO(Will): reconcile with `docs/PARTS_LIST.md`, which budgets a Raspberry Pi 5.
 - Ground station: Any GPU (RTX 3060+) for real-time, or CPU for slower processing
