@@ -14,7 +14,7 @@ to an incident commander through a live web dashboard.
 ## Core design principle
 
 EmberEye's software stack does not care what drone it is talking to.
-Every drone-specific concern lives inside a **drone adapter** — one class
+Every drone-specific concern lives inside a **drone adapter**, one class
 that knows how to pull frames and telemetry from a specific platform and
 convert them to EmberEye's internal format. Everything else in the
 pipeline treats a DJI Mavic 3 Thermal, an Autel EVO Dual, a custom PX4
@@ -100,5 +100,5 @@ python -m embereye.run --adapter simulated
 
 Wildland firefighting is dangerous work with a genuine information gap
 between the field and command. Improved situational awareness saves lives.
-This project is built to serve that mission first — technical
+This project is built to serve that mission first, technical
 sophistication is in service of it, not the reverse.
