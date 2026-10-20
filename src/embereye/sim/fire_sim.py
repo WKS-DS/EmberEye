@@ -30,7 +30,7 @@ from embereye.geo import GroundGrid, LocalFrame
 from embereye.masks import mask_to_polygons    # also importable from here, as before
 from embereye.prediction.spread import FUEL_MODELS, NON_BURNABLE, SpreadPredictor, Weather
 from embereye.prediction.terrain import Terrain
-from embereye.sim.camera import CameraModel, CameraPath, CameraPose
+from embereye.sim.camera import CameraModel, CameraPath, CameraPose, LawnmowerPath, OrbitPath
 from embereye.sim.world import FireWorld
 
 # Values used in the truth grid (SimObservation.truth_state).
@@ -265,7 +265,7 @@ class FireSim:
 
 
 # ---------------------------------------------------------------------------
-# A ready-made scenario
+# Ready-made scenarios and flight paths
 # ---------------------------------------------------------------------------
 def demo_scenario(terrain_kind: str = "flat", rows: int = 80, cols: int = 80, cell_size_m: float = 10.0) -> Scenario:
     """A small grass fire pushed north-east by the wind.
@@ -300,3 +300,79 @@ def demo_scenario(terrain_kind: str = "flat", rows: int = 80, cols: int = 80, ce
         ignition_cells=[(at(0.65, rows), at(0.33, cols))],
         local_frame=LocalFrame(origin_lat=47.6588, origin_lon=-117.4260, origin_alt_m=600.0),
     )
+
+
+def hard_scenario(rows: int = 160, cols: int = 160, cell_size_m: float = 10.0, hill_height_m: float = 90.0) -> Scenario:
+    """A harder test than the demo: more than one frame can see at once.
+
+    - The grid is large (1.6 km square by default), so the fire never fits
+      in a single frame and the map has to be built up over time.
+    - Two separate ignitions, so there are several fire regions.
+    - A tall hill between them hides part of the fire whenever the camera
+      is on the far side of it, so some burning cells go unseen.
+
+    Positions are fractions of the grid, as in demo_scenario, so a smaller
+    grid (e.g. 60 x 60 in tests) has the same layout.
+    """
+    grid = GroundGrid(rows, cols, cell_size_m)
+
+    def at(fraction: float, size: int) -> int:
+        return int(round(fraction * (size - 1)))
+
+    terrain = Terrain.hill(
+        rows, cols, cell_size_m,
+        height_m=hill_height_m,
+        radius_m=0.08 * min(rows, cols) * cell_size_m,
+        center_row=at(0.50, rows),
+        center_col=at(0.48, cols),
+    )
+
+    fuel_codes = np.full((rows, cols), 1)                                           # short grass everywhere
+    fuel_codes[at(0.10, rows):at(0.30, rows), at(0.55, cols):at(0.85, cols)] = 10   # timber block to the north-east
+    fuel_codes[at(0.60, rows):at(0.90, rows), at(0.62, cols)] = NON_BURNABLE        # a north-south road in the south-east
+
+    return Scenario(
+        grid=grid,
+        terrain=terrain,
+        fuel_codes=fuel_codes,
+        weather=Weather(wind_speed_mph=8.0, wind_to_deg=60.0, fuel_moisture_pct=8.0),
+        ignition_cells=[(at(0.68, rows), at(0.30, cols)),      # south-west of the hill
+                        (at(0.42, rows), at(0.66, cols))],     # north-east of the hill
+        local_frame=LocalFrame(origin_lat=47.6588, origin_lon=-117.4260, origin_alt_m=600.0),
+        fire_age_at_start_min=25.0,
+    )
+
+
+SCENARIOS = {"demo": demo_scenario, "hard": hard_scenario}
+PATHS = ("orbit", "lawnmower")
+
+
+def make_path(kind: str, grid: GroundGrid) -> CameraPath:
+    """A flight path sized to the grid.
+
+    - "orbit": circles the grid centre at a radius of 350 m per 800 m of
+      grid, so on the demo's 800 m grid it is exactly OrbitPath()'s default.
+    - "lawnmower": passes 300 m apart over the middle 80% of the grid.
+    """
+    extent = max(grid.width_m, grid.height_m)
+    if kind == "orbit":
+        return OrbitPath(radius_m=350.0 * extent / 800.0)
+    if kind == "lawnmower":
+        width = 0.8 * extent
+        spacing = 300.0
+        return LawnmowerPath(width_m=width, spacing_m=spacing, n_passes=int(width // spacing) + 1)
+    raise ValueError(f"Unknown path {kind!r}; use one of {PATHS}.")
+
+
+def visible_burning_fraction(obs: SimObservation) -> float:
+    """Share of the burning cells that at least one pixel of the frame shows.
+
+    Cells can be missed because they are outside the frame or hidden behind
+    terrain. 1.0 when nothing is burning.
+    """
+    burning = obs.truth_state == BURNING
+    n_burning = int(burning.sum())
+    if n_burning == 0:
+        return 1.0
+    shown = np.unique(obs.cell_ids[obs.fire_mask])
+    return len(shown) / n_burning

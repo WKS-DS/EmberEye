@@ -12,14 +12,13 @@ EmberEye detects wildfires from UAV footage by fusing RGB and thermal imagery. T
 ## Current status
 _Last updated: 2026-10-19_
 
-- **Branch:** review-fixes (not pushed). main = sim adapter, 3 commits not pushed. origin/main on GitHub = initial scaffold + 2 web edits from 2026-10-19 (not fetched here), so main and origin/main have diverged.
-- **Done:** review fixes Phases 0–3; Phase 4.1–4.3 (labelling module + audit); Phase 4 decisions (in `docs/ARCHITECTURE.md`, Detector → Labelling decisions); hand-check export (48 frames) + `scripts/score_handcheck.py`; Phase 5a scoring definition. 75 tests pass.
-- **Waiting on Will:** labelme masks for the 48 frames in `data/flame2/handcheck/`, then the scores. This blocks Phase 4.4 (block split + YOLO-seg export).
+- **Branch:** review-fixes (not pushed). main = sim adapter, 3 commits not pushed. origin/main (fetched 2026-10-19) = scaffold + 2 web edits, so main is 3 ahead and 2 behind. A `git merge-tree` dry run shows main, then review-fixes, rebase onto it without conflicts.
+- **Done:** review fixes Phases 0–3; Phase 4.1–4.3 (labelling module + audit); Phase 4 decisions (in `docs/ARCHITECTURE.md`, Detector → Labelling decisions); hand-check export (48 frames) + `scripts/score_handcheck.py`; Phase 5a scoring definition; Phase 5b (`hard_scenario`, `LawnmowerPath`, `scripts/sim_visibility.py`, `record --scenario/--path`). 83 tests pass.
+- **Waiting on Will:** (1) labelme masks for the 48 frames in `data/flame2/handcheck/`, then the scores. This blocks Phase 4.4 (block split + YOLO-seg export). (2) Rebasing main onto origin/main together, then review-fixes onto main.
 - **Next for Claude Code:**
-  1. Phase 5b: harder scenario + lawnmower path.
-  2. Workflow setup: pre-commit + gitleaks, CI, subagents, settings/hooks. First fetch origin, show Will the two web commits, and rebase main onto origin/main with him.
-  3. Phase 4.4, only after Will sends the scores. Raise first: `mask_to_yolo_seg` loses ~0.14 IoU vs the raw mask (it drops regions by outline area under 20, and simplifies with epsilon 1.0).
-  4. Build step 2: GeoRef + Fire Mapper. Include p90 latency metrics, a timestamped event log and GeoJSON output.
+  1. Workflow setup (after the rebase): pre-commit + gitleaks, CI, subagents, settings/hooks.
+  2. Phase 4.4, only after Will sends the scores. Raise first: `mask_to_yolo_seg` loses ~0.14 IoU vs the raw mask (it drops regions by outline area under 20, and simplifies with epsilon 1.0).
+  3. Build step 2: GeoRef + Fire Mapper. Include p90 latency metrics, a timestamped event log and GeoJSON output. Far cells can be smaller than a pixel (in frame but unseen), so the coverage mask must allow for that.
 - **Open decisions:** Pi 5 vs Jetson Orin Nano (TODO(Will) in `docs/PARTS_LIST.md` and `docs/ARCHITECTURE.md`); the repo URL mismatch (claude.ai project says `wkscott/EmberEye`, git remote is `WKS-DS/EmberEye`).
 
 ## Architecture
@@ -56,9 +55,9 @@ EmberEye/
 │   │   ├── terrain.py  # Elevation grid -> slope and aspect
 │   │   └── spread.py   # SpreadPredictor (arrival-time fire spread)
 │   ├── sim/            # MuJoCo fire simulator (ground truth for testing)
-│   │   ├── camera.py   # CameraModel, CameraPose, OrbitPath
+│   │   ├── camera.py   # CameraModel, CameraPose, OrbitPath, LawnmowerPath
 │   │   ├── world.py    # MuJoCo scene: ground tiles + camera
-│   │   ├── fire_sim.py # FireSim, Scenario, SimObservation
+│   │   ├── fire_sim.py # FireSim, SimObservation, demo/hard scenarios, make_path
 │   │   └── record.py   # Save a simulated flight to disk
 │   ├── data/
 │   │   └── flame2.py   # FLAME 2 labels, palette detection, hot masks, YOLO-seg lines
@@ -79,7 +78,8 @@ EmberEye/
 ├── scripts/
 │   ├── audit_flame2_labels.py  # Evidence for reviewing the labelling method
 │   ├── export_handcheck.py     # Pick the hand-check frames (8 per stratum)
-│   └── score_handcheck.py      # IoU of hot_mask vs hand masks, per stratum
+│   ├── score_handcheck.py      # IoU of hot_mask vs hand masks, per stratum
+│   └── sim_visibility.py       # Per sim frame: share of burning cells in view
 ├── tests/
 │   ├── test_flame2.py
 │   ├── test_geo.py
@@ -157,8 +157,17 @@ python -m embereye.run --adapter sim --duration 120
 # Save a simulated flight (frames, masks, poses, preview.mp4) to data/sim/demo/
 python -m embereye.sim.record --out data/sim/demo
 
+# The harder test: big grid, two fires, a hill (writes to data/sim/hard-lawnmower/)
+python -m embereye.sim.record --scenario hard --path lawnmower
+
+# Per frame: share of burning cells in view, and render time (prints only)
+python scripts/sim_visibility.py --scenario hard --path orbit
+
 # Audit the FLAME 2 labelling method (reads the dataset, writes data/flame2/audit/)
 python scripts/audit_flame2_labels.py
+
+# Score hot_mask against Will's labelme masks in data/flame2/handcheck/ (labelme steps in the script)
+python scripts/score_handcheck.py
 
 # Run tests
 pytest
@@ -176,17 +185,7 @@ Large files live in `data/` which is gitignored:
 
 ## Dependencies
 
-Core (now):
-- numpy, opencv-python, pytest
-- mujoco (fire simulator), pyproj (GPS <-> metres)
-
-Notebooks:
-- pandas, matplotlib, Pillow
-
-Coming soon:
-- ultralytics (YOLO11)
-- torch
-- fastapi, uvicorn (dashboard)
+`requirements.txt` is the dependency list. Core: numpy, opencv-python, pytest, mujoco (fire simulator), pyproj (GPS <-> metres). Notebooks: pandas, matplotlib, Pillow. Coming soon: ultralytics (YOLO11), torch, fastapi + uvicorn (dashboard).
 
 ## Notes for Claude Code
 
