@@ -69,11 +69,13 @@ EmberEye/
 ```bash
 # Install
 pip install -r requirements.txt
+pip install -e .
 
-# Run against a pre-recorded flight (no hardware needed)
-python -m embereye.run --adapter recorded --input data/recordings/demo_flight.mp4
+# Run against a pre-recorded flight (no hardware needed): a folder holding
+# rgb.mp4 and telemetry.json, plus thermal.mp4 if there is one
+python -m embereye.run --adapter recorded --input data/recordings/demo_flight/
 
-# Later: run against physical prototype
+# Later (planned): run against the physical prototype
 python -m embereye.run --adapter rpi_custom
 
 # Run against the built-in fire simulator (no hardware or footage needed)
@@ -87,19 +89,22 @@ python -m embereye.sim.record --out data/sim/demo
 
 ## Roadmap
 
-**Semester 1 (weeks 1–15) — Foundation:**
-- Recorded-footage adapter (so we can develop with no hardware)
-- Fire/smoke/person detector trained on FLAME dataset
-- Basic dashboard scaffold
-- End-to-end recorded-footage demo by week 15
+The simulator comes first, so georeferencing, fire mapping and spread
+prediction can be scored against a known ground truth before anything
+flies. The FLAME 2 detector is built alongside it. Each milestone is a
+GitHub milestone; the full design is in `docs/ARCHITECTURE.md`.
 
-**Semester 2 (weeks 16–30) — Real-time and field validation:**
-- Custom prototype adapter (physical drone)
-- Live pipeline with real-time inference
-- Geo-referencing and temporal tracking
-- Fire spread model
-- Field validation with controlled tests
-- Final demo and thesis
+| Milestone | Scope | Status |
+|---|---|---|
+| **M1 Sim adapter** | MuJoCo fire simulator: spread-model fire on terrain, scripted camera (orbit and lawnmower), exact pose, a hard scenario with occlusion | ✅ Done |
+| **M2 GeoRef + Fire Mapper** | Pixel → ground point by ray-marching the terrain, temporal filter, fire map, alerts, event log, GeoJSON; scored on the sim (IoU, p95 georef error, p90 latency) | Next |
+| **M3 Spread validation** | Arrival-time predictor run with wrong wind and fuel against sim truth; Next Day Wildfire Spread benchmark | Planned |
+| **M4 FLAME 2 detector** | Palette-aware thermal labels checked by hand, block-based split, YOLO11-seg training and evaluation (RGB, thermal, fusion) | In progress |
+| **M5 Hardware prototype** | Parts, on-board compute (Raspberry Pi 5 or Jetson Orin Nano, undecided), adapter for the physical drone | Planned |
+| **M6 Field validation** | Partner burns, real footage through the full pipeline | Planned |
+| **M7 Thesis + demo** | Write-up, final README, release | Planned |
+
+Stage 3 (suppression support) is future work beyond the thesis.
 
 ---
 
