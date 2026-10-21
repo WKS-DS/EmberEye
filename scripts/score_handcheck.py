@@ -20,19 +20,22 @@ hand-check folder, and prints scores.md.
 
 Labelling with labelme
 ----------------------
-labelme is a desktop app; keep it out of venv.nosync (it brings Qt):
-    brew install pipx && pipx ensurepath          # once, then open a new terminal
-    pipx install --python /opt/homebrew/bin/python3.11 labelme
-    labelme data/flame2/handcheck --labels fire --validatelabel exact \\
-        --flags no_fire,unsure --nodata --autosave
+labelme is a desktop app; give it its own environment, outside venv.nosync
+(it brings Qt). Checked with labelme 6.3.1, which auto-saves and leaves the
+image out of the JSON by default:
+    /opt/homebrew/bin/python3.11 -m venv ~/.venvs/labelme      # once
+    ~/.venvs/labelme/bin/pip install labelme                     # once
+    ~/.venvs/labelme/bin/labelme data/flame2/handcheck --labels fire \\
+        --validate-label exact --flags no_fire,unsure
 
-- Draw a polygon (Ctrl+N, click round the region, click the first point to
-  close it) around every region you judge to be fire, and label it "fire".
-  Rectangles and circles also work; other shape types are rejected.
+- Draw a polygon (Cmd+N on a Mac, click round the region, click the first
+  point to close it) around every region you judge to be fire, and label
+  it "fire". Rectangles and circles also work; AI masks and other shape
+  types are rejected.
 - No fire visible: draw nothing and tick the no_fire flag.
 - Can't tell: tick unsure. The frame is left out of the scores.
-- D / A move to the next / previous frame; --autosave writes
-  frame_NNNNN.json next to the image as you go.
+- D / A move to the next / previous frame. Each change is saved as
+  frame_NNNNN.json next to the image.
 
 Rules the scores follow
 -----------------------
