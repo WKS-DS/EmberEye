@@ -315,8 +315,8 @@ def old_hot_mask(thermal_bgr: np.ndarray, threshold: int = 200, min_area_px: int
 def mask_to_yolo_seg(
     mask: np.ndarray,
     class_id: int = 0,
-    epsilon_px: float = 1.0,
-    min_area_px: float = 20.0,
+    epsilon_px: float = 0.5,
+    min_area_px: float = 0.0,
 ) -> list[str]:
     """One YOLO segmentation label line per region of a mask.
 
@@ -324,6 +324,14 @@ def mask_to_yolo_seg(
     image width/height so they run from 0 to 1. Outlines are simplified
     with cv2.approxPolyDP (points within `epsilon_px` of a straight line
     are dropped) so label files stay small.
+
+    The label should reproduce the mask; filtering is hot_mask's job. By
+    default nothing is dropped: hot_mask already removes regions under its
+    own min_area_px (counted in pixels), and an outline encloses less area
+    than its pixel count, so a second cut here (it used to be 20, with
+    epsilon 1.0) threw away regions hot_mask had kept. On the 48 hand-check
+    frames the old settings matched the raw mask at IoU 0.86; these match
+    it at 0.97, the gap being filled holes and simplified edges.
     """
     height, width = mask.shape
     lines = []
