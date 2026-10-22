@@ -232,3 +232,13 @@ def test_yolo_seg_one_line_per_region_and_class_id():
 
 def test_yolo_seg_empty_mask_gives_no_lines():
     assert f2.mask_to_yolo_seg(np.zeros((SIZE, SIZE), dtype=bool)) == []
+
+
+def test_yolo_seg_keeps_every_region_hot_mask_keeps():
+    # A 4 x 5 block is 20 pixels, the smallest region hot_mask keeps, but its
+    # outline (through the edge pixels' centres) encloses only 3 x 4 = 12.
+    # The export must not drop it.
+    mask = square_mask((10, 10), 4)
+    mask[10:14, 14] = True
+    assert mask.sum() == 20
+    assert len(f2.mask_to_yolo_seg(mask)) == 1
