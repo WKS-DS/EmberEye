@@ -10,16 +10,16 @@ EmberEye detects wildfires from UAV footage by fusing RGB and thermal imagery. T
 **GitHub:** https://github.com/WKS-DS/EmberEye
 
 ## Current status
-_Last updated: 2026-10-19_
+_Last updated: 2026-10-21_
 
-- **Branch:** review-fixes (not pushed). main = sim adapter, 3 commits not pushed. origin/main (fetched 2026-10-19) = scaffold + 2 web edits, so main is 3 ahead and 2 behind. A `git merge-tree` dry run shows main, then review-fixes, rebase onto it without conflicts.
-- **Done:** review fixes Phases 0–3; Phase 4.1–4.3 (labelling module + audit); Phase 4 decisions (in `docs/ARCHITECTURE.md`, Detector → Labelling decisions); hand-check export (48 frames) + `scripts/score_handcheck.py`; Phase 5a scoring definition; Phase 5b (`hard_scenario`, `LawnmowerPath`, `scripts/sim_visibility.py`, `record --scenario/--path`). 83 tests pass.
-- **Waiting on Will:** (1) labelme masks for the 48 frames in `data/flame2/handcheck/`, then the scores. This blocks Phase 4.4 (block split + YOLO-seg export). (2) Rebasing main onto origin/main together, then review-fixes onto main.
+- **Branch:** `feat/flame2-split-export` → PR #2 (Phase 4.4), open for review. `chore/workflow-setup` holds 3 local doc commits (status, README roadmap, labelme 6 steps), not pushed: rebase it onto main after PR #2 merges. Repo `WKS-DS/EmberEye`; commits use the WKS-DS noreply email (repo-local git config) and `gh` runs as WKS-DS.
+- **Done:** M1 (sim, incl. Phase 5b); review fixes Phases 0–4.3; hand-check (48 frames, every stratum ≥ 0.53, mean 0.63: `docs/findings/flame2-label-validation.md`); YOLO-seg export now matches the mask (IoU 0.97); held-out rainbow tuning (no clear gain, defaults kept); Phase 4.4 split + export in `data/flame2/yolo_seg.nosync/` (train 38,715 / val 5,200 / test 5,302 frames, 34 excluded; loads in Ultralytics). 89 tests pass.
+- **Waiting on Will:** review and merge PR #2.
 - **Next for Claude Code:**
-  1. Workflow setup (after the rebase): pre-commit + gitleaks, CI, subagents, settings/hooks.
-  2. Phase 4.4, only after Will sends the scores. Raise first: `mask_to_yolo_seg` loses ~0.14 IoU vs the raw mask (it drops regions by outline area under 20, and simplifies with epsilon 1.0).
-  3. Build step 2: GeoRef + Fire Mapper. Include p90 latency metrics, a timestamped event log and GeoJSON output. Far cells can be smaller than a pixel (in frame but unseen), so the coverage mask must allow for that.
-- **Open decisions:** Pi 5 vs Jetson Orin Nano (TODO(Will) in `docs/PARTS_LIST.md` and `docs/ARCHITECTURE.md`); the repo URL mismatch (claude.ai project says `wkscott/EmberEye`, git remote is `WKS-DS/EmberEye`).
+  1. Workflow setup, steps B–E of `docs/WORKFLOW.md`, on `chore/workflow-setup`.
+  2. M4: train YOLO11-seg, RGB baseline first (`rgb/rgb_baseline.yaml`), then the YY ablation and thermal only. Fire-frame metrics are the headline: no-fire val/test frames have near-copies in train (the drone hovers before the burn), on top of the scene confound.
+  3. M2: GeoRef + Fire Mapper. Include p90 latency metrics, a timestamped event log and GeoJSON output. Far cells can be smaller than a pixel (in frame but unseen), so the coverage mask must allow for that.
+- **Open decisions:** Pi 5 vs Jetson Orin Nano (TODO(Will) in `docs/PARTS_LIST.md` and `docs/ARCHITECTURE.md`); license; whether to move the repo out of iCloud; forest no-fire negatives from another dataset (TODO(Will) in `docs/ARCHITECTURE.md`).
 
 ## Architecture
 
@@ -60,7 +60,8 @@ EmberEye/
 │   │   ├── fire_sim.py # FireSim, SimObservation, demo/hard scenarios, make_path
 │   │   └── record.py   # Save a simulated flight to disk
 │   ├── data/
-│   │   └── flame2.py   # FLAME 2 labels, palette detection, hot masks, YOLO-seg lines
+│   │   ├── flame2.py   # FLAME 2 labels, palette detection, hot masks, YOLO-seg lines
+│   │   └── flame2_split.py  # Train/val/test blocks, gaps, split checks
 │   ├── geo.py          # LocalFrame (GPS <-> metres), GroundGrid
 │   ├── masks.py        # mask <-> outline polygons, IoU (shared by sim and labelling)
 │   ├── pipeline/       # Detection pipeline (WIP)
@@ -73,24 +74,21 @@ EmberEye/
 │   │   ├── frames/     # 53,451 RGB + thermal pairs
 │   │   ├── labels.txt  # Fire/smoke labels
 │   │   ├── audit/      # Output of scripts/audit_flame2_labels.py
-│   │   └── handcheck/  # 48 thermal frames + manifest.csv + Will's labelme JSON
+│   │   ├── handcheck/  # 48 thermal frames + manifest.csv + Will's labelme JSON + scores
+│   │   └── yolo_seg.nosync/  # Phase 4.4 export: split.json, report, rgb/ + thermal/ YOLO-seg sets
 │   └── sim/            # Simulator output (not in git)
 ├── scripts/
 │   ├── audit_flame2_labels.py  # Evidence for reviewing the labelling method
 │   ├── export_handcheck.py     # Pick the hand-check frames (8 per stratum)
 │   ├── score_handcheck.py      # IoU of hot_mask vs hand masks, per stratum
+│   ├── tune_rainbow_mask.py    # Held-out tuning of hot_mask on rainbow frames
+│   ├── export_flame2_yolo.py   # Block split + YOLO-seg labels for training
 │   └── sim_visibility.py       # Per sim frame: share of burning cells in view
-├── tests/
-│   ├── test_flame2.py
-│   ├── test_geo.py
-│   ├── test_masks.py
-│   ├── test_recorded.py
-│   ├── test_sim.py
-│   ├── test_spread.py
-│   └── test_types.py
+├── tests/              # One test_<module>.py per module (pytest); none need the dataset
 ├── docs/
 │   ├── ARCHITECTURE.md
-│   └── PARTS_LIST.md
+│   ├── PARTS_LIST.md
+│   └── findings/       # One write-up per finding, e.g. flame2-label-validation.md
 └── venv.nosync/        # Python environment (not in git)
 ```
 
@@ -104,27 +102,19 @@ EmberEye/
 
 ## Current Work
 
-### Detector Development (Phase 1)
+Detector (milestone M4), a parallel track to the sim:
+1. ✅ Thermal-derived masks, hand-checked (mean IoU 0.63, `docs/findings/flame2-label-validation.md`)
+2. ✅ Block split + YOLO-seg export (`scripts/export_flame2_yolo.py`)
+3. ⬜ Train YOLO11-seg: RGB baseline (YN + no-fire), YY ablation, thermal only
+4. ⬜ Integrate the detector into the pipeline
 
-1. ✅ Dataset downloaded, labels parsed (53,451 frame pairs: 39,751 fire, 13,700 no-fire)
-2. 🔄 YOLO11-seg polygon labels from palette-aware thermal masks (hand-check, then export). Notebook 02's fixed threshold only works before frame ~17,000 and is being replaced.
-3. ⬜ Train YOLO11-seg on annotated data
-4. ⬜ Integrate detector into pipeline
-
-### Simulation Proof of Concept
-
-Build order from `docs/ARCHITECTURE.md`. The sim tests everything except the detector.
-
-1. ✅ Sim adapter — SpreadPredictor fire on a ground grid, scripted MuJoCo camera, exact pose
-2. ⬜ GeoRef + Fire Mapper — score against sim ground truth
-3. ⬜ Arrival-time predictor — test with wrong wind/fuel vs ground truth
-4. 🔄 FLAME 2 detector — parallel track (the list above)
+Simulation (the sim tests everything except the detector): ✅ M1 sim adapter → ⬜ M2 GeoRef + Fire Mapper → ⬜ M3 arrival-time predictor tested with wrong wind/fuel.
 
 How the sim works: `FireSim.run()` yields a `SimObservation` per frame with the RGB image, a fire mask read from MuJoCo's segmentation render (no ML), fire outlines as pixel polygons (same layout as YOLO `masks.xy`), the exact camera pose, and the true state of every ground cell.
 
 ### Annotation Strategy
 
-FLAME 2 has frame-level labels (Fire/NoFire), not masks, so masks are generated from the thermal frames. A fixed grayscale threshold does **not** work: the thermal frames are false-colour JPEGs, the palette switches from an inferno-style one to a rainbow one at about frame 17,000 (whose background is mostly dark red in some frames, magenta in others), and the colours appear to be rescaled every frame. The labelling logic lives in `src/embereye/data/flame2.py` (palette detection, per-palette hot-region masks, YOLO-seg export), so notebooks call it instead of re-implementing it. See `docs/ARCHITECTURE.md` (Detector → Training data strategy, Labelling decisions).
+FLAME 2 has frame-level labels (Fire/NoFire), not masks, so masks are generated from the thermal frames. A fixed grayscale threshold does **not** work: the thermal frames are false-colour JPEGs, the palette switches from an inferno-style one to a rainbow one at about frame 17,000 (whose background is mostly dark red in some frames, magenta in others), and the colours appear to be rescaled every frame. The labelling logic lives in `src/embereye/data/flame2.py` (palette detection, per-palette hot-region masks, YOLO-seg export), so notebooks call it instead of re-implementing it; the train/val/test blocks are in `flame2_split.py`. See `docs/ARCHITECTURE.md` (Detector → Training data strategy, Labelling decisions).
 
 ## Git Workflow
 
@@ -168,6 +158,9 @@ python scripts/audit_flame2_labels.py
 
 # Score hot_mask against Will's labelme masks in data/flame2/handcheck/ (labelme steps in the script)
 python scripts/score_handcheck.py
+
+# Block split + YOLO-seg labels for training (~10 min; rebuilds data/flame2/yolo_seg.nosync/)
+python scripts/export_flame2_yolo.py
 
 # Run tests
 pytest
