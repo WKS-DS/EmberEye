@@ -1,0 +1,34 @@
+# Lint and test every pull request. Branch protection can require this to pass.
+name: CI
+
+on:
+  pull_request:
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    env:
+      # The runner has no screen, so MuJoCo renders in software (OSMesa).
+      MUJOCO_GL: osmesa
+      PYOPENGL_PLATFORM: osmesa
+    steps:
+      - uses: actions/checkout@v7
+
+      - uses: actions/setup-python@v7
+        with:
+          python-version: "3.11"
+          cache: pip
+
+      - name: System libraries (OSMesa for MuJoCo, libGL for OpenCV)
+        run: sudo apt-get update && sudo apt-get install -y libosmesa6 libgl1
+
+      - name: Install
+        run: |
+          pip install -r requirements.txt
+          pip install -e .
+
+      - name: Ruff
+        run: ruff check .
+
+      - name: Tests (none need the datasets)
+        run: pytest
