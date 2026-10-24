@@ -72,6 +72,13 @@ The empty-mask share went from 0.1% to 0.3%, measured on every 50th rainbow fire
 
 **Decision: keep the current settings.** The tuned filter helps red-background frames but removes some of the tiny real fires in magenta YN frames, which breaks the rule against any stratum dropping more than 0.02. Applying the filter to red-background frames only might keep the gain without the loss. That is a new hypothesis, though, and the held-out half has now been used, so testing it fairly needs new hand labels.
 
+## Split used for training
+
+The labels were exported with the Phase 4.4 block split (`src/embereye/data/flame2_split.py`), by `scripts/export_flame2_yolo.py` run from commit `787be91`.
+
+- `split.json` SHA-256: `2ef6854913c7d71624f7035ba05859ea39a91f472b2380cdf085f946e2aea336`
+- Rule: val is for choosing settings, test is used once at the end, and the split never changes after training starts.
+
 ## Caveats
 
 - **One labeller.** There is no inter-rater agreement. IoU measures agreement with one person's reading of the thermal frames, and that reading is itself a judgement, for example about where flame ends and hot ground begins.
@@ -79,6 +86,7 @@ The empty-mask share went from 0.1% to 0.3%, measured on every 50th rainbow fire
 - **Small samples.** There are 8 frames per stratum. The 95% intervals for rainbow-red YY (0.47–0.59) and YN (0.42–0.71) reach below 0.5. The go decision rests on the means.
 - **The tuning was held out.** Settings were chosen on half the frames and are reported on the other half. Further tuning needs fresh labels, for example from the planned hand-labelled test set.
 - **Thermal only.** The masks were checked against the thermal frames. Whether they line up with the RGB frames, which the RGB detector trains on, is still open. The label audit found best-fit shifts that vary from frame to frame.
+- **RGB test metrics.** Until hand-labelled RGB test frames exist, RGB test metrics measure agreement with the thermal-derived labels, not true RGB fire detection.
 - **The 10% cap.** Two inferno frames, 14691 and 16751, have hand masks over 10% of the image. That is more than `hot_mask` can mark (`top_fraction=0.10`), which caps their IoU (0.65 and 0.76).
 
 ## Reproduce
