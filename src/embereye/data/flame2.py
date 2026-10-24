@@ -119,7 +119,7 @@ def _inferno_lookup() -> tuple[np.ndarray, np.ndarray]:
     """
     global _INFERNO_LOOKUP
     if _INFERNO_LOOKUP is None:
-        import matplotlib     # imported here so loading this module stays quick
+        import matplotlib  # imported here so loading this module stays quick
 
         palette_rgb = matplotlib.colormaps["inferno"](np.linspace(0, 1, 256))[:, :3] * 255
         palette_bgr = palette_rgb[:, ::-1].astype(np.float32)

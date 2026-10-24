@@ -31,7 +31,14 @@ import cv2
 import numpy as np
 
 from embereye.sim.fire_sim import (
-    BURNING, PATHS, SCENARIOS, FireSim, SimObservation, demo_scenario, make_path, visible_burning_fraction,
+    BURNING,
+    PATHS,
+    SCENARIOS,
+    FireSim,
+    SimObservation,
+    demo_scenario,
+    make_path,
+    visible_burning_fraction,
 )
 
 PREVIEW_FPS = 10
