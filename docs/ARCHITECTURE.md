@@ -418,7 +418,7 @@ def to_model_codes(landfire_codes: np.ndarray) -> np.ndarray:
 
 ## Stage 3: Suppression Support (Future Work)
 
-*Condensed. The full Stage 3 write-up (why autonomous suppression fails, retardant chemistry, use cases, hardware costs, research questions) is in git history: `git show 6b36535:docs/ARCHITECTURE.md`.*
+*Condensed. The full Stage 3 write-up (why autonomous suppression fails, retardant chemistry, use cases, hardware costs, research questions) is in git history: `git show 746f8db:docs/ARCHITECTURE.md`.*
 
 ### Core Concept
 

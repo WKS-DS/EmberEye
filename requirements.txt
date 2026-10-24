@@ -28,3 +28,5 @@ Pillow>=10.0
 
 # Dev
 pytest>=8.0
+ruff==0.17.2               # same version as .pre-commit-config.yaml, so local, hook and CI agree
+pre-commit>=4.0            # then run `pre-commit install` once

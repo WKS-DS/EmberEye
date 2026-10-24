@@ -27,7 +27,7 @@ from typing import Iterator, Optional
 import numpy as np
 
 from embereye.geo import GroundGrid, LocalFrame
-from embereye.masks import mask_to_polygons    # also importable from here, as before
+from embereye.masks import mask_to_polygons  # also importable from here, as before
 from embereye.prediction.spread import FUEL_MODELS, NON_BURNABLE, SpreadPredictor, Weather
 from embereye.prediction.terrain import Terrain
 from embereye.sim.camera import CameraModel, CameraPath, CameraPose, LawnmowerPath, OrbitPath
