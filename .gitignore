@@ -1,6 +1,16 @@
 # Large data files (FLAME 2 dataset, recordings, model weights). The leading / means
-# only the top-level data/ folder, not the src/embereye/data/ package.
-/data/
+# only the top-level data/ folder, not the src/embereye/data/ package. Its README
+# (sources and licences) is the one file in it that is committed.
+/data/*
+!/data/README.md
+
+# Secrets: .env holds them; .env.example (committed) lists their names.
+.env
+.env.*
+!.env.example
+
+# Personal Claude Code instructions, loaded alongside CLAUDE.md
+CLAUDE.local.md
 
 # Python
 __pycache__/
