@@ -10,15 +10,15 @@ EmberEye detects wildfires from UAV footage by fusing RGB and thermal imagery. T
 **GitHub:** https://github.com/WKS-DS/EmberEye
 
 ## Current status
-_Last updated: 2026-10-21_
+_Last updated: 2026-10-24_
 
-- **Branch:** `feat/flame2-split-export` → PR #2 (Phase 4.4), open for review. `chore/workflow-setup` holds 3 local doc commits (status, README roadmap, labelme 6 steps), not pushed: rebase it onto main after PR #2 merges. Repo `WKS-DS/EmberEye`; commits use the WKS-DS noreply email (repo-local git config) and `gh` runs as WKS-DS.
-- **Done:** M1 (sim, incl. Phase 5b); review fixes Phases 0–4.3; hand-check (48 frames, every stratum ≥ 0.53, mean 0.63: `docs/findings/flame2-label-validation.md`); YOLO-seg export now matches the mask (IoU 0.97); held-out rainbow tuning (no clear gain, defaults kept); Phase 4.4 split + export in `data/flame2/yolo_seg.nosync/` (train 38,715 / val 5,200 / test 5,302 frames, 34 excluded; loads in Ultralytics). 89 tests pass.
-- **Waiting on Will:** review and merge PR #2.
+- **Branch:** `chore/workflow-setup` → PR #3 (workflow step B: pre-commit, CI, data README, simplified `docs/WORKFLOW.md`), open for review. Repo `WKS-DS/EmberEye`; commits use the WKS-DS noreply email (repo-local git config) and `gh` runs as WKS-DS.
+- **Done:** M1 (sim, incl. Phase 5b); review fixes Phases 0–4.4: hand-check (every stratum ≥ 0.53, mean 0.63: `docs/findings/flame2-label-validation.md`), export fix, block split + YOLO-seg export in `data/flame2/yolo_seg.nosync/` (train 38,715 / val 5,200 / test 5,302). 89 tests pass.
+- **Waiting on Will:** review and merge PR #3; `pre-commit install` once; the GitHub settings checklist (`docs/WORKFLOW.md` §5).
 - **Next for Claude Code:**
-  1. Workflow setup, steps B–E of `docs/WORKFLOW.md`, on `chore/workflow-setup`.
-  2. M4: train YOLO11-seg, RGB baseline first (`rgb/rgb_baseline.yaml`), then the YY ablation and thermal only. Fire-frame metrics are the headline: no-fire val/test frames have near-copies in train (the drone hovers before the burn), on top of the scene confound.
-  3. M2: GeoRef + Fire Mapper. Include p90 latency metrics, a timestamped event log and GeoJSON output. Far cells can be smaller than a pixel (in frame but unseen), so the coverage mask must allow for that.
+  1. A `style:` PR applying `ruff format` (~640 lines, mostly column alignment) and turning the format check on in pre-commit and CI.
+  2. M2, as 4 PRs: (1) GeoRef on flat ground; (2) GeoRef with terrain; (3) Fire Mapper: burned + seen maps (far cells smaller than a pixel count as unseen); (4) scoring script: IoU over seen cells, coverage, mean/p95 georef error, on the demo and hard scenarios. Deferred until YOLO is plugged in: temporal filter, alerter, event log, GeoJSON, p90 latency.
+  3. M4: train YOLO11-seg, RGB baseline first (`rgb/rgb_baseline.yaml`). Fire-frame metrics are the headline: no-fire val/test frames have near-copies in train, on top of the scene confound.
 - **Open decisions:** Pi 5 vs Jetson Orin Nano (TODO(Will) in `docs/PARTS_LIST.md` and `docs/ARCHITECTURE.md`); license; whether to move the repo out of iCloud; forest no-fire negatives from another dataset (TODO(Will) in `docs/ARCHITECTURE.md`).
 
 ## Architecture
@@ -69,7 +69,7 @@ EmberEye/
 ├── notebooks/
 │   ├── 01_flame_exploration.ipynb
 │   └── 02_generate_annotations.ipynb
-├── data/
+├── data/               # Not in git, except README.md (dataset sources and licences)
 │   ├── flame2/         # FLAME 2 dataset (not in git)
 │   │   ├── frames/     # 53,451 RGB + thermal pairs
 │   │   ├── labels.txt  # Fire/smoke labels
@@ -88,7 +88,12 @@ EmberEye/
 ├── docs/
 │   ├── ARCHITECTURE.md
 │   ├── PARTS_LIST.md
+│   ├── WORKFLOW.md     # Branches/PRs, checks, secrets and data rules, GitHub settings
 │   └── findings/       # One write-up per finding, e.g. flame2-label-validation.md
+├── .github/workflows/ci.yml  # ruff + pytest on every PR
+├── .pre-commit-config.yaml   # ruff, gitleaks, nbstripout, 5 MB file limit
+├── .env.example        # Names of the secrets .env holds (.env is not in git)
+├── CLAUDE.local.md     # Will's personal instructions for Claude Code (not in git)
 └── venv.nosync/        # Python environment (not in git)
 ```
 
@@ -118,13 +123,7 @@ FLAME 2 has frame-level labels (Fire/NoFire), not masks, so masks are generated 
 
 ## Git Workflow
 
-Commit daily. Small commits are fine.
-
-```bash
-git add -A
-git commit -m "Descriptive message"
-git push origin main
-```
+Never commit to `main` directly. One branch per change → small PR → CI passes → "Rebase and merge". Conventional Commits (`feat(georef): ...`). Details, checks and the secrets/data rules: `docs/WORKFLOW.md`.
 
 ## Running the Project
 
@@ -134,6 +133,7 @@ python3.11 -m venv venv.nosync
 source venv.nosync/bin/activate
 pip install -r requirements.txt
 pip install -e .
+pre-commit install          # checks on every commit (ruff, gitleaks, nbstripout, file size)
 
 # Every new terminal: switch the environment on
 source venv.nosync/bin/activate
