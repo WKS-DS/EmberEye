@@ -91,13 +91,13 @@ python -m embereye.sim.record --out data/sim/demo
 
 The simulator comes first, so georeferencing, fire mapping and spread
 prediction can be scored against a known ground truth before anything
-flies. The FLAME 2 detector is built alongside it. Each milestone is a
-GitHub milestone; the full design is in `docs/ARCHITECTURE.md`.
+flies. The FLAME 2 detector is built alongside it. The full design is in
+`docs/ARCHITECTURE.md`.
 
 | Milestone | Scope | Status |
 |---|---|---|
 | **M1 Sim adapter** | MuJoCo fire simulator: spread-model fire on terrain, scripted camera (orbit and lawnmower), exact pose, a hard scenario with occlusion | ✅ Done |
-| **M2 GeoRef + Fire Mapper** | Pixel → ground point by ray-marching the terrain, temporal filter, fire map, alerts, event log, GeoJSON; scored on the sim (IoU, p95 georef error, p90 latency) | Next |
+| **M2 GeoRef + Fire Mapper** | Pixel → ground point (flat ground, then terrain), a map of burned and seen cells, scored on the sim (IoU over seen cells, coverage, mean and p95 georef error). The temporal filter, alerts, event log, GeoJSON and latency follow once YOLO is plugged in | Next |
 | **M3 Spread validation** | Arrival-time predictor run with wrong wind and fuel against sim truth; Next Day Wildfire Spread benchmark | Planned |
 | **M4 FLAME 2 detector** | Palette-aware thermal labels checked by hand, block-based split, YOLO11-seg training and evaluation (RGB, thermal, fusion) | In progress |
 | **M5 Hardware prototype** | Parts, on-board compute (Raspberry Pi 5 or Jetson Orin Nano, undecided), adapter for the physical drone | Planned |
