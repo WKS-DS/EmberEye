@@ -1,0 +1,29 @@
+# Checks that run on every commit. One-time setup: `pre-commit install`.
+# Run them over the whole repo: `pre-commit run --all-files`.
+repos:
+  # Lint Python (and notebooks), fixing what can be fixed safely.
+  # Formatting (ruff-format) comes in its own PR.
+  - repo: https://github.com/astral-sh/ruff-pre-commit
+    rev: v0.17.2
+    hooks:
+      - id: ruff-check
+        args: [--fix]
+
+  # Block anything that looks like a key or token.
+  - repo: https://github.com/gitleaks/gitleaks
+    rev: v8.30.0
+    hooks:
+      - id: gitleaks
+
+  # Strip notebook outputs, so no images, data previews or file paths get committed.
+  - repo: https://github.com/kynan/nbstripout
+    rev: 0.9.1
+    hooks:
+      - id: nbstripout
+
+  # Block files over 5 MB (datasets and weights stay out of git).
+  - repo: https://github.com/pre-commit/pre-commit-hooks
+    rev: v6.0.0
+    hooks:
+      - id: check-added-large-files
+        args: [--maxkb=5120]
