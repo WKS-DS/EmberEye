@@ -21,7 +21,15 @@ from embereye.prediction.spread import Weather
 from embereye.prediction.terrain import Terrain
 from embereye.sim.camera import CameraModel, LawnmowerPath, OrbitPath, look_rotation
 from embereye.sim.fire_sim import (
-    BURNED, BURNING, UNBURNED, FireSim, Scenario, demo_scenario, hard_scenario, make_path, mask_to_polygons,
+    BURNED,
+    BURNING,
+    UNBURNED,
+    FireSim,
+    Scenario,
+    demo_scenario,
+    hard_scenario,
+    make_path,
+    mask_to_polygons,
     visible_burning_fraction,
 )
 from embereye.sim.record import draw_preview
