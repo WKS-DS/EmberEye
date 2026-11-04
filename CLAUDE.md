@@ -10,15 +10,14 @@ EmberEye detects wildfires from UAV footage by fusing RGB and thermal imagery. T
 **GitHub:** https://github.com/WKS-DS/EmberEye
 
 ## Current status
-_Last updated: 2026-10-24_
+_Last updated: 2026-11-03_
 
-- **Branch:** `chore/workflow-setup` → PR #3 (workflow step B: pre-commit, CI, data README, simplified `docs/WORKFLOW.md`), open for review. Repo `WKS-DS/EmberEye`; commits use the WKS-DS noreply email (repo-local git config) and `gh` runs as WKS-DS.
-- **Done:** M1 (sim, incl. Phase 5b); review fixes Phases 0–4.4: hand-check (every stratum ≥ 0.53, mean 0.63: `docs/findings/flame2-label-validation.md`), export fix, block split + YOLO-seg export in `data/flame2/yolo_seg.nosync/` (train 38,715 / val 5,200 / test 5,302). 89 tests pass.
-- **Waiting on Will:** review and merge PR #3; `pre-commit install` once; the GitHub settings checklist (`docs/WORKFLOW.md` §5).
+- **Open PRs:** #4 `style/ruff-format` (ruff format + format check in pre-commit and CI); #5 `feat/georef-flat` (M2 PR 1: GeoRef on flat ground, `pipeline/georef.py`). Repo `WKS-DS/EmberEye`; commits use the WKS-DS noreply email (repo-local git config) and `gh` runs as WKS-DS.
+- **Done:** M1 (sim, incl. Phase 5b); review fixes Phases 0–4.4: hand-check (every stratum ≥ 0.53, mean 0.63: `docs/findings/flame2-label-validation.md`), export fix, block split + YOLO-seg export in `data/flame2/yolo_seg.nosync/` (train 38,715 / val 5,200 / test 5,302); workflow step B (PR #3: pre-commit, CI). 99 tests pass.
+- **Waiting on Will:** review and merge PR #4, then #5; the GitHub settings checklist (`docs/WORKFLOW.md` §5).
 - **Next for Claude Code:**
-  1. A `style:` PR applying `ruff format` (~640 lines, mostly column alignment) and turning the format check on in pre-commit and CI.
-  2. M2, as 4 PRs: (1) GeoRef on flat ground; (2) GeoRef with terrain; (3) Fire Mapper: burned + seen maps (far cells smaller than a pixel count as unseen); (4) scoring script: IoU over seen cells, coverage, mean/p95 georef error, on the demo and hard scenarios. Deferred until YOLO is plugged in: temporal filter, alerter, event log, GeoJSON, p90 latency.
-  3. M4: train YOLO11-seg, RGB baseline first (`rgb/rgb_baseline.yaml`). Fire-frame metrics are the headline: no-fire val/test frames have near-copies in train, on top of the scene confound.
+  1. The rest of M2, one PR each: (2) GeoRef with terrain; (3) Fire Mapper: burned + seen maps (far cells smaller than a pixel count as unseen); (4) scoring script: IoU over seen cells, coverage, mean/p95 georef error, on the demo and hard scenarios. Deferred until YOLO is plugged in: temporal filter, alerter, event log, GeoJSON, p90 latency.
+  2. M4: train YOLO11-seg, RGB baseline first (`rgb/rgb_baseline.yaml`). Fire-frame metrics are the headline: no-fire val/test frames have near-copies in train, on top of the scene confound.
 - **Open decisions:** Pi 5 vs Jetson Orin Nano (TODO(Will) in `docs/PARTS_LIST.md` and `docs/ARCHITECTURE.md`); license; whether to move the repo out of iCloud; forest no-fire negatives from another dataset (TODO(Will) in `docs/ARCHITECTURE.md`).
 
 ## Architecture
@@ -65,6 +64,7 @@ EmberEye/
 │   ├── geo.py          # LocalFrame (GPS <-> metres), GroundGrid
 │   ├── masks.py        # mask <-> outline polygons, IoU (shared by sim and labelling)
 │   ├── pipeline/       # Detection pipeline (WIP)
+│   │   └── georef.py   # GeoRef: pixel -> ground point (flat ground so far)
 │   └── run.py          # Entry point
 ├── notebooks/
 │   ├── 01_flame_exploration.ipynb
