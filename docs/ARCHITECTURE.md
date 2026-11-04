@@ -71,6 +71,8 @@ for result in results:
 
 **Purpose:** Find the point on the ground that a pixel shows, in local metres (and from there, GPS). Inputs: pixel (x, y), the camera pose from telemetry, the camera's field of view, and terrain elevation.
 
+**Built so far: flat ground** (`pipeline/georef.py`, `GeoRef`). It rebuilds the camera from a frame's telemetry and field of view only. On the flat demo flight it picks the cell MuJoCo rendered for 99.97% of pixels (worst frame 99.80%); the rest are pixels on a cell border. It refuses frames that report gimbal roll, and takes gimbal yaw as relative to the drone's heading. Steps 2–3 below (terrain) are next.
+
 **How it works:**
 1. **A ray per pixel.** Build the camera pose from telemetry (position, heading, gimbal pitch and roll) and get the pixel's viewing direction with `CameraModel.pixel_rays(pose, x, y)` from `sim/camera.py`. This is exact pinhole-camera geometry, tested as the inverse of `CameraModel.project()`.
 2. **Intersect the ray with the terrain.** Step along the ray in coarse steps until it drops below `Terrain.elevation`, then narrow down the crossing point by bisection.
@@ -542,7 +544,7 @@ Stage 3 does not attempt autonomous fire suppression. Instead, it uses Stage 2's
 ## Suggested Build Order
 
 1. ✅ **Sim adapter** — Spread Predictor fire on ground grid, scripted MuJoCo camera, exact pose (done: `src/embereye/sim/`, `adapters/sim.py`)
-2. **GeoRef + Fire Mapper** — Score against sim ground truth
+2. 🔄 **GeoRef + Fire Mapper** — Score against sim ground truth (GeoRef on flat ground done: `pipeline/georef.py`)
 3. **Arrival-time predictor** — Test with wrong wind/fuel vs ground truth
 4. **FLAME 2 detector** — Parallel track; independent of sim
 
