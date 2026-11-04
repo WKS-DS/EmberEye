@@ -53,9 +53,9 @@ class LocalFrame:
     """
 
     def __init__(self, origin_lat: float, origin_lon: float, origin_alt_m: float = 0.0) -> None:
-        self.origin_lat   = origin_lat
-        self.origin_lon   = origin_lon
-        self.origin_alt_m = origin_alt_m    # metres above sea level at local up = 0
+        self.origin_lat = origin_lat
+        self.origin_lon = origin_lon
+        self.origin_alt_m = origin_alt_m  # metres above sea level at local up = 0
 
         self.epsg = utm_epsg_for(origin_lat, origin_lon)
         # always_xy=True means pyproj takes and returns (lon, lat) / (x, y)
@@ -82,8 +82,8 @@ class LocalFrame:
 class GroundGrid:
     """A rows x cols grid of square cells, centred on the local origin."""
 
-    rows:        int
-    cols:        int
+    rows: int
+    cols: int
     cell_size_m: float
 
     @property
@@ -105,7 +105,7 @@ class GroundGrid:
 
         Works on single numbers or numpy arrays.
         """
-        east  = (col + 0.5) * self.cell_size_m - self.width_m / 2
+        east = (col + 0.5) * self.cell_size_m - self.width_m / 2
         north = self.height_m / 2 - (row + 0.5) * self.cell_size_m
         return east, north
 

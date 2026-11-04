@@ -24,12 +24,12 @@ import numpy as np
 class Terrain:
     """Elevation for every grid cell, plus the slope and aspect worked out from it."""
 
-    elevation:   np.ndarray     # (rows, cols) metres above the local datum; row 0 = north edge
+    elevation: np.ndarray  # (rows, cols) metres above the local datum; row 0 = north edge
     cell_size_m: float
 
     # Filled in by __post_init__ — `init=False` means "not a constructor argument".
-    slope:  np.ndarray = field(init=False)   # degrees
-    aspect: np.ndarray = field(init=False)   # degrees clockwise from north, pointing downhill
+    slope: np.ndarray = field(init=False)  # degrees
+    aspect: np.ndarray = field(init=False)  # degrees clockwise from north, pointing downhill
 
     def __post_init__(self) -> None:
         self.elevation = np.asarray(self.elevation, dtype=float)
@@ -40,7 +40,7 @@ class Terrain:
 
         # Columns count eastward, so d_col is already "per metre east".
         # Rows count SOUTHward, so "per metre north" is the negative.
-        d_east  = d_col
+        d_east = d_col
         d_north = -d_row
 
         self.slope = np.degrees(np.arctan(np.hypot(d_east, d_north)))
@@ -65,7 +65,7 @@ class Terrain:
         Useful for tests: every cell has the same slope and aspect.
         """
         row_idx, col_idx = np.indices((rows, cols))
-        east  = col_idx * cell_size_m
+        east = col_idx * cell_size_m
         north = -row_idx * cell_size_m
         # Distance travelled in the uphill direction, times rise per metre.
         along = east * np.sin(np.radians(uphill_deg)) + north * np.cos(np.radians(uphill_deg))

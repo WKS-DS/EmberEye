@@ -34,8 +34,10 @@ def main() -> None:
     scenario = SCENARIOS[args.scenario]()
     started = time.perf_counter()
     with FireSim(scenario, make_path(args.path, scenario.grid)) as sim:
-        print(f"{args.scenario} scenario, {args.path} path: "
-              f"{scenario.grid.rows}x{scenario.grid.cols} cells, built in {time.perf_counter() - started:.1f} s\n")
+        print(
+            f"{args.scenario} scenario, {args.path} path: "
+            f"{scenario.grid.rows}x{scenario.grid.cols} cells, built in {time.perf_counter() - started:.1f} s\n"
+        )
         print(" frame  time_s  burning  visible  fraction  render_s")
         fractions, render_s = [], []
         for index in range(int(args.duration // args.interval) + 1):
@@ -45,12 +47,16 @@ def main() -> None:
             fraction = visible_burning_fraction(obs)
             fractions.append(fraction)
             n_burning = int((obs.truth_state == BURNING).sum())
-            print(f"{index:6d}  {obs.time_s:6.0f}  {n_burning:7d}  {round(fraction * n_burning):7d}  "
-                  f"{fraction:8.2f}  {render_s[-1]:8.3f}")
+            print(
+                f"{index:6d}  {obs.time_s:6.0f}  {n_burning:7d}  {round(fraction * n_burning):7d}  "
+                f"{fraction:8.2f}  {render_s[-1]:8.3f}"
+            )
 
     fractions = np.array(fractions)
-    print(f"\nvisible fraction: median {np.median(fractions):.2f}, min {fractions.min():.2f}; "
-          f"frames below 0.9: {(fractions < 0.9).sum()} of {len(fractions)}")
+    print(
+        f"\nvisible fraction: median {np.median(fractions):.2f}, min {fractions.min():.2f}; "
+        f"frames below 0.9: {(fractions < 0.9).sum()} of {len(fractions)}"
+    )
     print(f"render time per frame: median {np.median(render_s):.3f} s, max {max(render_s):.3f} s")
 
 

@@ -119,8 +119,15 @@ def training_label_mask(mask: np.ndarray) -> np.ndarray:
 def score_frame(row: dict, folder: Path, params: dict) -> dict:
     thermal = cv2.imread(str(folder / row["file"]))
     shape = thermal.shape[:2]
-    out = {"frame": row["frame"], "stratum": row["stratum"], "iou": "", "iou_label": "",
-           "hand_pct": "", "mask_pct": "", "hand_over_cap": ""}
+    out = {
+        "frame": row["frame"],
+        "stratum": row["stratum"],
+        "iou": "",
+        "iou_label": "",
+        "hand_pct": "",
+        "mask_pct": "",
+        "hand_over_cap": "",
+    }
 
     json_path = (folder / row["file"]).with_suffix(".json")
     if not json_path.exists():
@@ -133,15 +140,22 @@ def score_frame(row: dict, folder: Path, params: dict) -> dict:
     if palette == f2.UNKNOWN:
         predicted = np.zeros(shape, dtype=bool)
     else:
-        predicted = f2.hot_mask(thermal, palette, top_fraction=params["top_fraction"],
-                                min_contrast=params["min_contrast"], max_frame_median=params["gate"])
-    out.update({
-        "iou": round(iou(predicted, hand), 3),
-        "iou_label": round(iou(training_label_mask(predicted), hand), 3),
-        "hand_pct": round(100 * hand.mean(), 1),
-        "mask_pct": round(100 * predicted.mean(), 1),
-        "hand_over_cap": "yes" if hand.mean() > params["top_fraction"] else "",
-    })
+        predicted = f2.hot_mask(
+            thermal,
+            palette,
+            top_fraction=params["top_fraction"],
+            min_contrast=params["min_contrast"],
+            max_frame_median=params["gate"],
+        )
+    out.update(
+        {
+            "iou": round(iou(predicted, hand), 3),
+            "iou_label": round(iou(training_label_mask(predicted), hand), 3),
+            "hand_pct": round(100 * hand.mean(), 1),
+            "mask_pct": round(100 * predicted.mean(), 1),
+            "hand_over_cap": "yes" if hand.mean() > params["top_fraction"] else "",
+        }
+    )
     if not predicted.any():
         return {**out, "status": "excluded: empty gated mask"}
     return {**out, "status": "scored"}
@@ -163,7 +177,9 @@ def summary_row(name: str, rows: list[dict]) -> dict:
         "mean_iou": round(mean, 3) if scored else "-",
         "median_iou": round(float(np.median(scored)), 3) if scored else "-",
         "min_iou": round(min(scored), 3) if scored else "-",
-        "mean_iou_label": round(float(np.mean([r["iou_label"] for r in rows if r["status"] == "scored"])), 3) if scored else "-",
+        "mean_iou_label": round(float(np.mean([r["iou_label"] for r in rows if r["status"] == "scored"])), 3)
+        if scored
+        else "-",
         "hand_over_cap": sum(r["hand_over_cap"] == "yes" for r in rows),
         "excluded": sum(r["status"].startswith("excluded") for r in rows),
         "unsure": sum(r["status"] == "unsure" for r in rows),
@@ -200,19 +216,28 @@ def main() -> None:
 
     summary = [summary_row(s, [r for r in rows if r["stratum"] == s]) for s in STRATA]
     summary.append(summary_row("all", rows))
-    per_frame = [{k: r[k] for k in ("frame", "stratum", "status", "iou", "iou_label", "hand_pct", "mask_pct", "hand_over_cap")}
-                 for r in rows if r["status"] != "not labelled"]
+    per_frame = [
+        {k: r[k] for k in ("frame", "stratum", "status", "iou", "iou_label", "hand_pct", "mask_pct", "hand_over_cap")}
+        for r in rows
+        if r["status"] != "not labelled"
+    ]
     report = [
-        "# Hand-check scores", "",
+        "# Hand-check scores",
+        "",
         f"hot_mask with top_fraction={args.top_fraction}, min_contrast={args.min_contrast}, gate={args.gate}. "
-        f"Go/no-go for 4.4: mean IoU >= {PASS_IOU} in every stratum.", "",
-        markdown_table(summary), "",
+        f"Go/no-go for 4.4: mean IoU >= {PASS_IOU} in every stratum.",
+        "",
+        markdown_table(summary),
+        "",
         "`iou` = hot_mask vs your mask (the verdict uses this); `iou_label` = the exported YOLO-seg label vs your mask. "
         "`scored` frames count towards the IoU. `excluded` = gated mask empty (would be left out of training). "
         f"`hand_over_cap` = your mask covers more than {100 * args.top_fraction:.0f}% of the image, "
-        "more than hot_mask can ever mark.", "",
-        "## Per frame", "",
-        markdown_table(per_frame) if per_frame else "No frames labelled yet.", "",
+        "more than hot_mask can ever mark.",
+        "",
+        "## Per frame",
+        "",
+        markdown_table(per_frame) if per_frame else "No frames labelled yet.",
+        "",
     ]
     (args.dir / "scores.md").write_text("\n".join(report))
     print("\n".join(report))

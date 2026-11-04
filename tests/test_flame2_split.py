@@ -1,4 +1,5 @@
 """Tests for the FLAME 2 block split (embereye/data/flame2_split.py). No dataset needed."""
+
 import pytest
 
 from embereye.data.flame2_split import VAL_TEST_BLOCKS, assign_splits, check_split, split_ranges
@@ -31,11 +32,11 @@ def test_bad_blocks_are_rejected():
 def test_check_split_finds_missing_strata_and_frames_too_close():
     assignment = assign_splits(70, BLOCKS, gap=5)
     strata = {n: "a" for n in assignment}
-    strata[45] = "b"                                      # only in test
+    strata[45] = "b"  # only in test
     problems = check_split(assignment, strata, gap=5)
     assert "train has no b frames" in problems and "val has no b frames" in problems
 
-    assignment[8] = "train"                               # a gap frame put back into train
+    assignment[8] = "train"  # a gap frame put back into train
     assert any("only 3 apart" in p for p in check_split(assignment, {}, gap=5))
 
 
@@ -45,5 +46,5 @@ def test_the_flame2_split_keeps_its_rules():
     counts = {s: sum(v == s for v in assignment.values()) for s in ("train", "val", "test", None)}
     assert counts["val"] == sum(last - first + 1 for first, last, s in VAL_TEST_BLOCKS if s == "val")
     assert 0.09 < counts["val"] / 53451 < 0.11 and 0.09 < counts["test"] / 53451 < 0.11
-    assert all(assignment[n] == "test" for n in range(1, 1301))       # test starts at the first frame
-    assert assignment[13700] == assignment[13701] == "train"           # no gap at the no-fire/fire boundary
+    assert all(assignment[n] == "test" for n in range(1, 1301))  # test starts at the first frame
+    assert assignment[13700] == assignment[13701] == "train"  # no gap at the no-fire/fire boundary

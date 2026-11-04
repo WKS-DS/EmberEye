@@ -50,18 +50,25 @@ from pathlib import Path
 import cv2
 import numpy as np
 
-sys.path.insert(0, str(Path(__file__).parent))     # to reuse the hand-check helpers
+sys.path.insert(0, str(Path(__file__).parent))  # to reuse the hand-check helpers
 from export_handcheck import label_blocks, thumbnail  # noqa: E402
 
 from embereye.data import flame2 as f2  # noqa: E402
 from embereye.data.flame2_split import GAP_FRAMES, SPLITS, VAL_TEST_BLOCKS, assign_splits, check_split, split_ranges  # noqa: E402
 
 OUT = f2.FLAME2_DIR / "yolo_seg.nosync"
-GATE = 0.25                     # hot_mask max_frame_median, as decided in Phase 4
-THUMB_EVERY = 10                # frames sampled for the leakage check
-SAME_VIEW = (0.8, 0.9)          # thumbnail correlations, in RGB AND thermal, counted as the same view
-STRATA = ["no-fire", "inferno YY", "inferno YN", "rainbow-red YY", "rainbow-red YN",
-          "rainbow-magenta YY", "rainbow-magenta YN"]
+GATE = 0.25  # hot_mask max_frame_median, as decided in Phase 4
+THUMB_EVERY = 10  # frames sampled for the leakage check
+SAME_VIEW = (0.8, 0.9)  # thumbnail correlations, in RGB AND thermal, counted as the same view
+STRATA = [
+    "no-fire",
+    "inferno YY",
+    "inferno YN",
+    "rainbow-red YY",
+    "rainbow-red YN",
+    "rainbow-magenta YY",
+    "rainbow-magenta YN",
+]
 
 
 def stratum(rec: dict) -> str:
@@ -70,7 +77,7 @@ def stratum(rec: dict) -> str:
 
 def label_frame(n: int, fire: bool) -> tuple[str, list[str], dict, np.ndarray]:
     """(palette variant, YOLO-seg lines, extra fields, thermal image) for one frame.
-    The extra fields include `label`: "empty", "fire" or "excluded: ...". """
+    The extra fields include `label`: "empty", "fire" or "excluded: ..."."""
     thermal = cv2.imread(str(f2.frame_paths(n)[1]))
     variant = f2.palette_variant(thermal)
     if not fire:
@@ -84,10 +91,17 @@ def label_frame(n: int, fire: bool) -> tuple[str, list[str], dict, np.ndarray]:
     lines = f2.mask_to_yolo_seg(mask)
     if not lines:
         return variant, [], {"label": "excluded: no outline"}, thermal
-    return variant, lines, {"label": "fire", "mask_pct": round(100 * float(mask.mean()), 2), "regions": len(lines)}, thermal
+    return (
+        variant,
+        lines,
+        {"label": "fire", "mask_pct": round(100 * float(mask.mean()), 2), "regions": len(lines)},
+        thermal,
+    )
 
 
-def write_modality(name: str, image_index: int, used: list[dict], lines: dict[int, list[str]], copy: bool) -> dict[str, int]:
+def write_modality(
+    name: str, image_index: int, used: list[dict], lines: dict[int, list[str]], copy: bool
+) -> dict[str, int]:
     """Images, labels, list files and yaml for one modality. Returns list sizes."""
     root = OUT / name
     for split in SPLITS:
@@ -119,9 +133,13 @@ def write_modality(name: str, image_index: int, used: list[dict], lines: dict[in
     for group, entries in groups.items():
         (root / f"{group}.txt").write_text("\n".join(entries) + "\n")
 
-    yamls = {"rgb": [("rgb_baseline", "train_yn", "RGB baseline: YN fire frames + no-fire frames"),
-                     ("rgb_yy_ablation", "train_all", "RGB ablation: all fire frames (YY too) + no-fire frames")],
-             "thermal": [("thermal", "train_all", "Thermal only: all fire frames + no-fire frames")]}[name]
+    yamls = {
+        "rgb": [
+            ("rgb_baseline", "train_yn", "RGB baseline: YN fire frames + no-fire frames"),
+            ("rgb_yy_ablation", "train_all", "RGB ablation: all fire frames (YY too) + no-fire frames"),
+        ],
+        "thermal": [("thermal", "train_all", "Thermal only: all fire frames + no-fire frames")],
+    }[name]
     for stem, train, title in yamls:
         (root / f"{stem}.yaml").write_text(
             f"# FLAME 2 fire segmentation. {title}.\n"
@@ -145,12 +163,22 @@ def leakage(records: list[dict], thumbs: dict[int, tuple[np.ndarray, np.ndarray]
     rows = []
     for split in ("val", "test"):
         for group, is_fire in (("fire", True), ("no-fire", False)):
-            sampled = [r["frame"] for r in records if r["split"] == split and r["fire"] == is_fire and r["frame"] in thumbs]
-            both = np.minimum(np.array([thumbs[n][0] for n in sampled]) @ train_thermal.T,
-                              np.array([thumbs[n][1] for n in sampled]) @ train_rgb.T)
+            sampled = [
+                r["frame"] for r in records if r["split"] == split and r["fire"] == is_fire and r["frame"] in thumbs
+            ]
+            both = np.minimum(
+                np.array([thumbs[n][0] for n in sampled]) @ train_thermal.T,
+                np.array([thumbs[n][1] for n in sampled]) @ train_rgb.T,
+            )
             best = both.max(axis=1)
-            rows.append({"split": split, "frames": group, "sampled": len(sampled),
-                         **{f"same_view_above_{t}_pct": round(100 * float((best > t).mean()), 1) for t in SAME_VIEW}})
+            rows.append(
+                {
+                    "split": split,
+                    "frames": group,
+                    "sampled": len(sampled),
+                    **{f"same_view_above_{t}_pct": round(100 * float((best > t).mean()), 1) for t in SAME_VIEW},
+                }
+            )
     return rows
 
 
@@ -178,8 +206,14 @@ def main() -> None:
     for n in range(1, n_frames + 1):
         fire, smoke = labels[n]
         variant, frame_lines, extra, thermal = label_frame(n, fire)
-        rec = {"frame": n, "split": assignment[n], "fire": fire,
-               "flag": ("YY" if smoke else "YN") if fire else "NN", "palette": variant, **extra}
+        rec = {
+            "frame": n,
+            "split": assignment[n],
+            "fire": fire,
+            "flag": ("YY" if smoke else "YN") if fire else "NN",
+            "palette": variant,
+            **extra,
+        }
         if rec["split"] is None:
             rec["label"] = "gap: " + rec["label"]
         records.append(rec)
@@ -223,18 +257,40 @@ def main() -> None:
     counts = Counter((stratum(r), r["split"]) for r in used)
     gap_counts = Counter(stratum(r) for r in records if r["split"] is None)
     excl_counts = Counter(stratum(r) for r in excluded)
-    strata_rows = [{"stratum": s, "train": counts[(s, "train")], "val": counts[(s, "val")], "test": counts[(s, "test")],
-                    "gap (unused)": gap_counts[s], "excluded": excl_counts[s]} for s in STRATA]
-    strata_rows.append({"stratum": "all", **{k: sum(r[k] for r in strata_rows) for k in ("train", "val", "test", "gap (unused)", "excluded")}})
+    strata_rows = [
+        {
+            "stratum": s,
+            "train": counts[(s, "train")],
+            "val": counts[(s, "val")],
+            "test": counts[(s, "test")],
+            "gap (unused)": gap_counts[s],
+            "excluded": excl_counts[s],
+        }
+        for s in STRATA
+    ]
+    strata_rows.append(
+        {
+            "stratum": "all",
+            **{k: sum(r[k] for r in strata_rows) for k in ("train", "val", "test", "gap (unused)", "excluded")},
+        }
+    )
 
     block_rows = []
     for first, last, flags in label_blocks(labels_path):
         members = [r for r in records if first <= r["frame"] <= last]
         split_mix = Counter(r["split"] for r in members if r["frame"] in lines)
-        block_rows.append({"block": f"{first}-{last}", "flags": flags, "frames": len(members),
-                           "train": split_mix["train"], "val": split_mix["val"], "test": split_mix["test"],
-                           "gap": sum(r["split"] is None for r in members),
-                           "excluded": sum(r["label"].startswith("excluded") for r in members)})
+        block_rows.append(
+            {
+                "block": f"{first}-{last}",
+                "flags": flags,
+                "frames": len(members),
+                "train": split_mix["train"],
+                "val": split_mix["val"],
+                "test": split_mix["test"],
+                "gap": sum(r["split"] is None for r in members),
+                "excluded": sum(r["label"].startswith("excluded") for r in members),
+            }
+        )
 
     # Checks, read back from the files written (rgb and thermal labels must also agree).
     written: dict[int, str] = {}
@@ -247,11 +303,19 @@ def main() -> None:
             label_differs += path.read_text() != (OUT / "thermal" / "labels" / split / path.name).read_text()
     by_frame = {r["frame"]: r for r in records}
     written_sorted = sorted(written)
-    too_close = sum(1 for a, b in zip(written_sorted, written_sorted[1:]) if written[a] != written[b] and b - a <= GAP_FRAMES)
-    nofire_nonempty = sum(1 for n, s in written.items()
-                          if not by_frame[n]["fire"] and (OUT / "rgb" / "labels" / s / f"frame_{n:05d}.txt").stat().st_size)
-    fire_empty = sum(1 for n, s in written.items()
-                     if by_frame[n]["fire"] and not (OUT / "rgb" / "labels" / s / f"frame_{n:05d}.txt").stat().st_size)
+    too_close = sum(
+        1 for a, b in zip(written_sorted, written_sorted[1:]) if written[a] != written[b] and b - a <= GAP_FRAMES
+    )
+    nofire_nonempty = sum(
+        1
+        for n, s in written.items()
+        if not by_frame[n]["fire"] and (OUT / "rgb" / "labels" / s / f"frame_{n:05d}.txt").stat().st_size
+    )
+    fire_empty = sum(
+        1
+        for n, s in written.items()
+        if by_frame[n]["fire"] and not (OUT / "rgb" / "labels" / s / f"frame_{n:05d}.txt").stat().st_size
+    )
     checks = [
         ("every split has frames of every stratum", all(counts[(s, split)] > 0 for s in STRATA for split in SPLITS)),
         (f"frames of different splits are more than {GAP_FRAMES} apart ({too_close} pairs too close)", too_close == 0),
@@ -265,36 +329,62 @@ def main() -> None:
     ranges = split_ranges(assignment)
 
     report = [
-        "# FLAME 2 split and YOLO-seg export", "",
+        "# FLAME 2 split and YOLO-seg export",
+        "",
         f"Made {split_json['created']} from commit `{commit}` by `scripts/export_flame2_yolo.py`. "
-        f"split.json sha256: `{digest}`.", "",
+        f"split.json sha256: `{digest}`.",
+        "",
         f"Images are {'copies' if args.copy else 'symlinks into data/flame2/frames/'}. "
         "Labels: no-fire frames empty; fire frames from hot_mask with the frame gate "
-        f"(max_frame_median={GATE}), exported by mask_to_yolo_seg. One class, 0: fire.", "",
-        "## Blocks", "",
+        f"(max_frame_median={GATE}), exported by mask_to_yolo_seg. One class, 0: fire.",
+        "",
+        "## Blocks",
+        "",
         *(f"- **{split}:** " + ", ".join(f"{a}-{b}" for a, b in ranges[split]) for split in SPLITS),
-        f"- **gap (in no split):** {GAP_FRAMES} frames on the train side of every val/test block", "",
-        "## Frames per stratum", "", markdown_table(strata_rows), "",
-        "## Experiment sets", "",
-        "| list | rgb | thermal |", "|---|---|---|",
-        *(f"| {g} | {sizes['rgb'].get(g, '-')} | {sizes['thermal'].get(g, '-')} |"
-          for g in sorted(set(sizes["rgb"]) | set(sizes["thermal"]))), "",
-        "`train_yn` (YN fire + no-fire) is the RGB baseline; `train_all` is the YY ablation and the thermal training set.", "",
-        "## Checks", "", *(f"- {'PASS' if ok else 'FAIL'}: {text}" for text, ok in checks), "",
-        "## Per labels.txt block", "", markdown_table(block_rows), "",
-        "## Leakage: does train hold the same view as val/test?", "",
+        f"- **gap (in no split):** {GAP_FRAMES} frames on the train side of every val/test block",
+        "",
+        "## Frames per stratum",
+        "",
+        markdown_table(strata_rows),
+        "",
+        "## Experiment sets",
+        "",
+        "| list | rgb | thermal |",
+        "|---|---|---|",
+        *(
+            f"| {g} | {sizes['rgb'].get(g, '-')} | {sizes['thermal'].get(g, '-')} |"
+            for g in sorted(set(sizes["rgb"]) | set(sizes["thermal"]))
+        ),
+        "",
+        "`train_yn` (YN fire + no-fire) is the RGB baseline; `train_all` is the YY ablation and the thermal training set.",
+        "",
+        "## Checks",
+        "",
+        *(f"- {'PASS' if ok else 'FAIL'}: {text}" for text, ok in checks),
+        "",
+        "## Per labels.txt block",
+        "",
+        markdown_table(block_rows),
+        "",
+        "## Leakage: does train hold the same view as val/test?",
+        "",
         f"Every {THUMB_EVERY}th frame of val and test, compared with every {THUMB_EVERY}th train frame by "
         "32x32 thumbnail correlation; a pair is the same view only if RGB and thermal both correlate above the "
         "threshold. The gaps stop neighbouring frames leaking; they can't stop the drone hovering over, or "
         "returning to, one view for minutes. Before the burn it hovers over the same grassland, so no-fire "
         "val/test frames have near-copies in train: treat no-fire results as optimistic (on top of the scene "
-        "confound below), and fire-frame metrics as the headline.", "",
-        markdown_table(leaks), "",
-        "## Excluded fire frames", "",
+        "confound below), and fire-frame metrics as the headline.",
+        "",
+        markdown_table(leaks),
+        "",
+        "## Excluded fire frames",
+        "",
         f"{len(excluded)} fire frames have no mask and are in no split: "
         + ", ".join(f"{k}: {v}" for k, v in Counter(r["label"] for r in excluded).items())
-        + ". Listed in `excluded_frames.csv`.", "",
-        "## Caveats", "",
+        + ". Listed in `excluded_frames.csv`.",
+        "",
+        "## Caveats",
+        "",
         "- **Scene confound.** Every no-fire frame is open grassland and sky from before the burn; the fire "
         "frames are forest. Image-level false-positive rates on these no-fire frames are not evidence that a "
         "detector avoids false alarms in forest. TODO(Will): add forest no-fire negatives from another "
@@ -304,7 +394,8 @@ def main() -> None:
         "audit found no consistent RGB/thermal transform.",
         "- **Label quality** was checked on 48 hand-labelled frames: mean IoU 0.63, every stratum at least 0.53 "
         "(docs/findings/flame2-label-validation.md).",
-        "- The planned hand-labelled test set should be drawn from the test blocks.", "",
+        "- The planned hand-labelled test set should be drawn from the test blocks.",
+        "",
     ]
     (OUT / "split_report.md").write_text("\n".join(report))
     print("\n".join(report))

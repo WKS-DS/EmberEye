@@ -37,7 +37,7 @@ from typing import Optional
 import cv2
 import numpy as np
 
-sys.path.insert(0, str(Path(__file__).parent))     # to reuse the labelme reader
+sys.path.insert(0, str(Path(__file__).parent))  # to reuse the labelme reader
 from score_handcheck import hand_mask  # noqa: E402
 
 from embereye.data import flame2 as f2  # noqa: E402
@@ -53,8 +53,14 @@ CURRENT = (0.35, None, None)
 MIN_GAIN, MAX_STRATUM_DROP, MAX_EMPTY_RISE_PCT = 0.03, 0.02, 1.0
 
 
-def rainbow_mask(thermal: np.ndarray, min_contrast: float, seed: Optional[float], density: Optional[float],
-                 top_fraction: float = 0.10, min_area_px: int = 20) -> np.ndarray:
+def rainbow_mask(
+    thermal: np.ndarray,
+    min_contrast: float,
+    seed: Optional[float],
+    density: Optional[float],
+    top_fraction: float = 0.10,
+    min_area_px: int = 20,
+) -> np.ndarray:
     """hot_mask for a rainbow frame (gate on), plus the optional density and seed rules."""
     position = f2.heat_position(thermal, f2.RAINBOW)
     if np.median(position) > GATE:
@@ -84,12 +90,21 @@ def load_frames() -> list[dict]:
         members = sorted((r for r in rows if r["stratum"] == stratum), key=lambda r: int(r["frame"]))
         for i, r in enumerate(members):
             thermal = cv2.imread(str(HANDCHECK / r["file"]))
-            status, hand = hand_mask(json.loads((HANDCHECK / r["file"]).with_suffix(".json").read_text()),
-                                     thermal.shape[:2])
+            status, hand = hand_mask(
+                json.loads((HANDCHECK / r["file"]).with_suffix(".json").read_text()), thermal.shape[:2]
+            )
             if hand is None:
                 continue
-            frames.append({"frame": int(r["frame"]), "stratum": stratum, "half": "tuning" if i % 2 == 0 else "held-out",
-                           "thermal": thermal, "hand": hand, "palette": f2.detect_palette(thermal)})
+            frames.append(
+                {
+                    "frame": int(r["frame"]),
+                    "stratum": stratum,
+                    "half": "tuning" if i % 2 == 0 else "held-out",
+                    "thermal": thermal,
+                    "hand": hand,
+                    "palette": f2.detect_palette(thermal),
+                }
+            )
     return frames
 
 
@@ -107,14 +122,15 @@ def main() -> None:
 
     # The current settings must reproduce hot_mask exactly, or the comparison means nothing.
     for f in rainbow:
-        assert np.array_equal(rainbow_mask(f["thermal"], *CURRENT),
-                              f2.hot_mask(f["thermal"], f2.RAINBOW, max_frame_median=GATE)), f["frame"]
+        assert np.array_equal(
+            rainbow_mask(f["thermal"], *CURRENT), f2.hot_mask(f["thermal"], f2.RAINBOW, max_frame_median=GATE)
+        ), f["frame"]
 
     tuning = [f for f in rainbow if f["half"] == "tuning"]
     held_out = [f for f in rainbow if f["half"] == "held-out"]
-    configs = list(itertools.product(MIN_CONTRASTS, SEEDS, DENSITIES))    # simplest first
+    configs = list(itertools.product(MIN_CONTRASTS, SEEDS, DENSITIES))  # simplest first
     tuning_scores = {c: mean_iou(tuning, c) for c in configs}
-    chosen = max(configs, key=lambda c: tuning_scores[c])      # ties go to the simpler (earlier) one
+    chosen = max(configs, key=lambda c: tuning_scores[c])  # ties go to the simpler (earlier) one
     best_tuning = tuning_scores[chosen]
     print(f"{len(configs)} candidates scored on {len(tuning)} rainbow tuning frames.")
     print(f"current {CURRENT}: {mean_iou(tuning, CURRENT):.3f}; chosen {chosen}: {best_tuning:.3f}\n")
@@ -139,14 +155,21 @@ def main() -> None:
             if f2.detect_palette(thermal) == f2.RAINBOW:
                 sample.append(thermal)
     empty_before, empty_after = empty_share(CURRENT, sample), empty_share(chosen, sample)
-    print(f"rainbow fire frames with an empty mask (every 50th, n={len(sample)}): "
-          f"current {empty_before:.1f}%, chosen {empty_after:.1f}%")
+    print(
+        f"rainbow fire frames with an empty mask (every 50th, n={len(sample)}): "
+        f"current {empty_before:.1f}%, chosen {empty_after:.1f}%"
+    )
 
-    adopt = (after - before >= MIN_GAIN and max(drops) <= MAX_STRATUM_DROP
-             and empty_after - empty_before <= MAX_EMPTY_RISE_PCT)
-    print(f"\nDecision: {'ADOPT ' + str(chosen) if adopt else 'KEEP the current settings'} "
-          f"(needs held-out gain >= {MIN_GAIN}, no stratum down > {MAX_STRATUM_DROP}, "
-          f"empty-mask rise <= {MAX_EMPTY_RISE_PCT} pt)")
+    adopt = (
+        after - before >= MIN_GAIN
+        and max(drops) <= MAX_STRATUM_DROP
+        and empty_after - empty_before <= MAX_EMPTY_RISE_PCT
+    )
+    print(
+        f"\nDecision: {'ADOPT ' + str(chosen) if adopt else 'KEEP the current settings'} "
+        f"(needs held-out gain >= {MIN_GAIN}, no stratum down > {MAX_STRATUM_DROP}, "
+        f"empty-mask rise <= {MAX_EMPTY_RISE_PCT} pt)"
+    )
 
 
 if __name__ == "__main__":
