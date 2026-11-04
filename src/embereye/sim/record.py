@@ -42,23 +42,23 @@ from embereye.sim.fire_sim import (
 )
 
 PREVIEW_FPS = 10
-MAX_CELLS_IN_16_BIT_PNG = 65535     # largest value a 16-bit image can hold
+MAX_CELLS_IN_16_BIT_PNG = 65535  # largest value a 16-bit image can hold
 
 
 def pose_to_dict(obs: SimObservation) -> dict:
     """The camera pose as plain numbers that JSON can store."""
     pose = obs.pose
     return {
-        "east_m":      pose.east_m,
-        "north_m":     pose.north_m,
-        "up_m":        pose.up_m,
+        "east_m": pose.east_m,
+        "north_m": pose.north_m,
+        "up_m": pose.up_m,
         "heading_deg": pose.heading_deg,
-        "pitch_deg":   pose.pitch_deg,
-        "lat":         pose.lat,
-        "lon":         pose.lon,
-        "alt_msl_m":   pose.alt_msl_m,
-        "alt_agl_m":   pose.alt_agl_m,
-        "rotation":    pose.rotation.tolist(),
+        "pitch_deg": pose.pitch_deg,
+        "lat": pose.lat,
+        "lon": pose.lon,
+        "alt_msl_m": pose.alt_msl_m,
+        "alt_agl_m": pose.alt_agl_m,
+        "rotation": pose.rotation.tolist(),
     }
 
 
@@ -91,7 +91,7 @@ def draw_preview(sim: FireSim, obs: SimObservation) -> np.ndarray:
     tile_rgb = (sim.tile_colors(obs.truth_state, obs.time_s) * 255).astype(np.uint8)
     ground = cv2.resize(cv2.cvtColor(tile_rgb, cv2.COLOR_RGB2BGR), (map_w, map_h), interpolation=cv2.INTER_NEAREST)
     top_down = np.full((height, height, 3), 40, dtype=np.uint8)
-    top_down[pad_y:pad_y + map_h, pad_x:pad_x + map_w] = ground
+    top_down[pad_y : pad_y + map_h, pad_x : pad_x + map_w] = ground
 
     # Mark the drone and the direction it is looking.
     def to_map_px(east_m: float, north_m: float) -> tuple[int, int]:
@@ -143,17 +143,19 @@ def save_run(
                 video = cv2.VideoWriter(str(out_dir / "preview.mp4"), fourcc, PREVIEW_FPS, (w, h))
             video.write(preview_frame)
 
-        frames.append({
-            "index":           obs.index,
-            "time_s":          obs.time_s,
-            "fire_time_min":   obs.fire_time_min,
-            "ts":              obs.ts.isoformat(),
-            "pose":            pose_to_dict(obs),
-            "fire_polygons":   [polygon.tolist() for polygon in obs.fire_polygons],
-            "n_fire_pixels":   int(obs.fire_mask.sum()),
-            "n_burning_cells": int((obs.truth_state == BURNING).sum()),
-            "visible_burning_fraction": visible_burning_fraction(obs),
-        })
+        frames.append(
+            {
+                "index": obs.index,
+                "time_s": obs.time_s,
+                "fire_time_min": obs.fire_time_min,
+                "ts": obs.ts.isoformat(),
+                "pose": pose_to_dict(obs),
+                "fire_polygons": [polygon.tolist() for polygon in obs.fire_polygons],
+                "n_fire_pixels": int(obs.fire_mask.sum()),
+                "n_burning_cells": int((obs.truth_state == BURNING).sum()),
+                "visible_burning_fraction": visible_burning_fraction(obs),
+            }
+        )
 
     if video is not None:
         video.release()
@@ -167,28 +169,28 @@ def save_run(
 
     summary = {
         "camera": {
-            "width":     camera.width,
-            "height":    camera.height,
+            "width": camera.width,
+            "height": camera.height,
             "fov_v_deg": camera.fov_v_deg,
             "fov_h_deg": camera.fov_h_deg,
-            "focal_px":  camera.focal_px,
+            "focal_px": camera.focal_px,
         },
         "grid": {"rows": grid.rows, "cols": grid.cols, "cell_size_m": grid.cell_size_m},
         "origin": {
-            "lat":      scenario.local_frame.origin_lat,
-            "lon":      scenario.local_frame.origin_lon,
-            "alt_m":    scenario.local_frame.origin_alt_m,
+            "lat": scenario.local_frame.origin_lat,
+            "lon": scenario.local_frame.origin_lon,
+            "alt_m": scenario.local_frame.origin_alt_m,
             "utm_epsg": scenario.local_frame.epsg,
         },
         "weather": {
-            "wind_speed_mph":    scenario.weather.wind_speed_mph,
-            "wind_to_deg":       scenario.weather.wind_to_deg,
+            "wind_speed_mph": scenario.weather.wind_speed_mph,
+            "wind_to_deg": scenario.weather.wind_to_deg,
             "fuel_moisture_pct": scenario.weather.fuel_moisture_pct,
         },
         "fire_age_at_start_min": scenario.fire_age_at_start_min,
-        "burn_duration_min":     scenario.burn_duration_min,
-        "frame_interval_s":      frame_interval_s,
-        "frames":                frames,
+        "burn_duration_min": scenario.burn_duration_min,
+        "frame_interval_s": frame_interval_s,
+        "frames": frames,
     }
     (out_dir / "sim.json").write_text(json.dumps(summary, indent=1))
     return len(frames)
@@ -196,13 +198,19 @@ def save_run(
 
 def main() -> None:
     parser = argparse.ArgumentParser(description="Run the EmberEye fire simulator and save the frames")
-    parser.add_argument("--scenario",   choices=list(SCENARIOS), default="demo", help="Which simulated world")
-    parser.add_argument("--path",       choices=PATHS, default="orbit", help="Which flight path")
-    parser.add_argument("--out",        type=Path,  default=None,
-                        help="Output folder (default: data/sim/demo for the demo orbit, else data/sim/<scenario>-<path>)")
-    parser.add_argument("--duration",   type=float, default=1200.0, help="Length of the simulated flight, in seconds")
-    parser.add_argument("--interval",   type=float, default=5.0,    help="Simulated seconds between frames")
-    parser.add_argument("--terrain",    choices=["flat", "hill"], default=None, help="Shape of the ground (demo only; default flat)")
+    parser.add_argument("--scenario", choices=list(SCENARIOS), default="demo", help="Which simulated world")
+    parser.add_argument("--path", choices=PATHS, default="orbit", help="Which flight path")
+    parser.add_argument(
+        "--out",
+        type=Path,
+        default=None,
+        help="Output folder (default: data/sim/demo for the demo orbit, else data/sim/<scenario>-<path>)",
+    )
+    parser.add_argument("--duration", type=float, default=1200.0, help="Length of the simulated flight, in seconds")
+    parser.add_argument("--interval", type=float, default=5.0, help="Simulated seconds between frames")
+    parser.add_argument(
+        "--terrain", choices=["flat", "hill"], default=None, help="Shape of the ground (demo only; default flat)"
+    )
     parser.add_argument("--no-preview", action="store_true", help="Skip writing preview.mp4")
     args = parser.parse_args()
 
@@ -217,7 +225,11 @@ def main() -> None:
     # ones never overwrites the saved demo.
     out = args.out
     if out is None:
-        out = Path("data/sim/demo") if (args.scenario, args.path) == ("demo", "orbit") else Path(f"data/sim/{args.scenario}-{args.path}")
+        out = (
+            Path("data/sim/demo")
+            if (args.scenario, args.path) == ("demo", "orbit")
+            else Path(f"data/sim/{args.scenario}-{args.path}")
+        )
 
     with FireSim(scenario, make_path(args.path, scenario.grid)) as sim:
         n = save_run(sim, out, args.duration, args.interval, preview=not args.no_preview)

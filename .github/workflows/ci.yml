@@ -28,7 +28,9 @@ jobs:
           pip install -e .
 
       - name: Ruff
-        run: ruff check .
+        run: |
+          ruff check .
+          ruff format --check .
 
       - name: Tests (none need the datasets)
         run: pytest

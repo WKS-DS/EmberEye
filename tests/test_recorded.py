@@ -5,6 +5,7 @@ in a temporary folder. `tmp_path` is a pytest "fixture": naming it as a
 test argument makes pytest hand the test a fresh, empty folder that is
 cleaned up afterwards.
 """
+
 import asyncio
 import json
 from datetime import datetime
@@ -37,11 +38,13 @@ def make_fake_recording(out_dir: Path, n_frames: int = 60, size=(320, 240)):
 
     # Telemetry: fake GPS drift
     telem = [
-        {"ts": f"2026-08-15T14:00:{i//30:02d}.{(i%30)*33_000:06d}+00:00",
-         "lat": 47.6588 + i * 1e-6,
-         "lon": -117.4260 + i * 1e-6,
-         "alt_m": 120.0,
-         "heading_deg": 90.0}
+        {
+            "ts": f"2026-08-15T14:00:{i // 30:02d}.{(i % 30) * 33_000:06d}+00:00",
+            "lat": 47.6588 + i * 1e-6,
+            "lon": -117.4260 + i * 1e-6,
+            "alt_m": 120.0,
+            "heading_deg": 90.0,
+        }
         for i in range(n_frames)
     ]
     (out_dir / "telemetry.json").write_text(json.dumps(telem))
@@ -59,6 +62,7 @@ def remove_telemetry_timestamps(recording_dir: Path) -> None:
 
 def collect_frames(recording_dir: Path, max_frames=None, **adapter_kwargs):
     """Stream a recording and return its Frames as a list."""
+
     async def run():
         frames = []
         async with RecordedFootageAdapter(recording_dir=recording_dir, **adapter_kwargs) as adapter:
@@ -116,7 +120,7 @@ def test_loop_mode_keeps_ids_and_timestamps_increasing(tmp_path, with_telemetry_
     if not with_telemetry_ts:
         remove_telemetry_timestamps(tmp_path)
 
-    frames = collect_frames(tmp_path, max_frames=15, loop=True)     # about 1.5 loops
+    frames = collect_frames(tmp_path, max_frames=15, loop=True)  # about 1.5 loops
 
     ids = [int(frame.frame_id) for frame in frames]
     assert ids == list(range(15))

@@ -42,17 +42,19 @@ def look_rotation(heading_deg: float, pitch_deg: float) -> np.ndarray:
                   the convention MuJoCo and OpenGL use)
     """
     heading = math.radians(heading_deg)
-    pitch   = math.radians(pitch_deg)
+    pitch = math.radians(pitch_deg)
 
-    forward = np.array([
-        math.sin(heading) * math.cos(pitch),    # east
-        math.cos(heading) * math.cos(pitch),    # north
-        math.sin(pitch),                        # up (negative when looking down)
-    ])
+    forward = np.array(
+        [
+            math.sin(heading) * math.cos(pitch),  # east
+            math.cos(heading) * math.cos(pitch),  # north
+            math.sin(pitch),  # up (negative when looking down)
+        ]
+    )
     # "Right" stays level because a gimbal keeps the horizon flat (no roll).
     right = np.array([math.cos(heading), -math.sin(heading), 0.0])
-    back  = -forward
-    up    = np.cross(back, right)
+    back = -forward
+    up = np.cross(back, right)
 
     return np.column_stack([right, up, back])
 
@@ -66,19 +68,19 @@ class CameraPose:
 
     # Position in local metres (see geo.py). `up_m` is height above the
     # local datum, i.e. above the level the flat ground sits at.
-    east_m:      float
-    north_m:     float
-    up_m:        float
+    east_m: float
+    north_m: float
+    up_m: float
 
-    heading_deg: float          # 0 = N, 90 = E
-    pitch_deg:   float          # 0 = horizon, -90 = straight down
-    rotation:    np.ndarray     # 3x3, see look_rotation()
+    heading_deg: float  # 0 = N, 90 = E
+    pitch_deg: float  # 0 = horizon, -90 = straight down
+    rotation: np.ndarray  # 3x3, see look_rotation()
 
     # The same position the way a real drone would report it.
-    lat:         float
-    lon:         float
-    alt_msl_m:   float          # altitude above sea level
-    alt_agl_m:   float          # altitude above the ground directly below
+    lat: float
+    lon: float
+    alt_msl_m: float  # altitude above sea level
+    alt_agl_m: float  # altitude above the ground directly below
 
     @property
     def position(self) -> np.ndarray:
@@ -92,9 +94,9 @@ class CameraPose:
 class CameraModel:
     """An ideal (distortion-free) camera: image size and field of view."""
 
-    width:     int   = 640
-    height:    int   = 480
-    fov_v_deg: float = 50.0     # vertical field of view
+    width: int = 640
+    height: int = 480
+    fov_v_deg: float = 50.0  # vertical field of view
 
     @property
     def focal_px(self) -> float:
@@ -134,12 +136,12 @@ class CameraModel:
 
         # Re-express each point along the camera's own right/up/back axes.
         in_camera = relative @ pose.rotation
-        depth = -in_camera[:, 2]            # distance in front of the lens
+        depth = -in_camera[:, 2]  # distance in front of the lens
         in_front = depth > 1e-9
 
         safe_depth = np.where(in_front, depth, np.nan)
         x = self.cx + self.focal_px * in_camera[:, 0] / safe_depth
-        y = self.cy - self.focal_px * in_camera[:, 1] / safe_depth   # minus: pixel y counts down
+        y = self.cy - self.focal_px * in_camera[:, 1] / safe_depth  # minus: pixel y counts down
         return np.column_stack([x, y]), in_front
 
     def pixel_rays(self, pose: CameraPose, x: np.ndarray, y: np.ndarray) -> np.ndarray:
@@ -150,11 +152,14 @@ class CameraModel:
         """
         x = np.asarray(x, dtype=float)
         y = np.asarray(y, dtype=float)
-        in_camera = np.stack([
-            (x - self.cx) / self.focal_px,
-            -(y - self.cy) / self.focal_px,
-            -np.ones_like(x),
-        ], axis=-1)
+        in_camera = np.stack(
+            [
+                (x - self.cx) / self.focal_px,
+                -(y - self.cy) / self.focal_px,
+                -np.ones_like(x),
+            ],
+            axis=-1,
+        )
         in_world = in_camera @ pose.rotation.T
         return in_world / np.linalg.norm(in_world, axis=-1, keepdims=True)
 
@@ -165,11 +170,12 @@ class CameraModel:
 @dataclass(frozen=True, slots=True)
 class PathPoint:
     """Where a scripted path puts the camera at one moment."""
-    east_m:      float
-    north_m:     float
-    up_m:        float
+
+    east_m: float
+    north_m: float
+    up_m: float
     heading_deg: float
-    pitch_deg:   float
+    pitch_deg: float
 
 
 class CameraPath(ABC):
@@ -190,16 +196,16 @@ class OrbitPath(CameraPath):
     so a single flight covers a range of viewing angles.
     """
 
-    radius_m:          float = 350.0
-    period_s:          float = 240.0    # time for one full lap
-    altitude_min_m:    float = 120.0    # heights are `up_m`: above the local datum
-    altitude_max_m:    float = 220.0
-    altitude_period_s: float = 150.0    # time for one full up-and-down cycle
-    center_east_m:     float = 0.0
-    center_north_m:    float = 0.0
-    target_up_m:       float = 0.0      # height of the point the camera aims at
-    start_bearing_deg: float = 180.0    # where on the circle the flight starts, seen from the centre (180 = due south)
-    clockwise:         bool  = True     # as seen from above
+    radius_m: float = 350.0
+    period_s: float = 240.0  # time for one full lap
+    altitude_min_m: float = 120.0  # heights are `up_m`: above the local datum
+    altitude_max_m: float = 220.0
+    altitude_period_s: float = 150.0  # time for one full up-and-down cycle
+    center_east_m: float = 0.0
+    center_north_m: float = 0.0
+    target_up_m: float = 0.0  # height of the point the camera aims at
+    start_bearing_deg: float = 180.0  # where on the circle the flight starts, seen from the centre (180 = due south)
+    clockwise: bool = True  # as seen from above
 
     def at(self, time_s: float) -> PathPoint:
         # Bearing from the centre out to the drone.
@@ -208,11 +214,11 @@ class OrbitPath(CameraPath):
         bearing_deg = (self.start_bearing_deg + direction * 360.0 * laps) % 360.0
         bearing = math.radians(bearing_deg)
 
-        east  = self.center_east_m  + self.radius_m * math.sin(bearing)
+        east = self.center_east_m + self.radius_m * math.sin(bearing)
         north = self.center_north_m + self.radius_m * math.cos(bearing)
 
         # A sine wave between the two altitude limits, starting at the midpoint.
-        mid   = (self.altitude_min_m + self.altitude_max_m) / 2
+        mid = (self.altitude_min_m + self.altitude_max_m) / 2
         swing = (self.altitude_max_m - self.altitude_min_m) / 2
         up = mid + swing * math.sin(2 * math.pi * time_s / self.altitude_period_s)
 
@@ -243,13 +249,13 @@ class LawnmowerPath(CameraPath):
         pass 0   ------------------->   (starts at the west end)
     """
 
-    width_m:        float = 1200.0      # length of each pass, east to west
-    spacing_m:      float = 300.0       # distance between neighbouring passes
-    n_passes:       int   = 5
-    altitude_m:     float = 200.0       # `up_m`: above the local datum
-    pitch_deg:      float = -60.0
-    speed_mps:      float = 10.0
-    center_east_m:  float = 0.0
+    width_m: float = 1200.0  # length of each pass, east to west
+    spacing_m: float = 300.0  # distance between neighbouring passes
+    n_passes: int = 5
+    altitude_m: float = 200.0  # `up_m`: above the local datum
+    pitch_deg: float = -60.0
+    speed_mps: float = 10.0
+    center_east_m: float = 0.0
     center_north_m: float = 0.0
 
     @property
@@ -278,8 +284,8 @@ class LawnmowerPath(CameraPath):
 
     def _point_along(self, along: float) -> tuple[float, float, float]:
         """(east, north, heading) at `along` metres into the forward pattern."""
-        west  = self.center_east_m - self.width_m / 2
-        east  = self.center_east_m + self.width_m / 2
+        west = self.center_east_m - self.width_m / 2
+        east = self.center_east_m + self.width_m / 2
         south = self.center_north_m - (self.n_passes - 1) * self.spacing_m / 2
         turn_length = math.pi * self.turn_radius_m
 
@@ -302,16 +308,18 @@ class LawnmowerPath(CameraPath):
                 fraction = along / turn_length
                 center_east = east if going_east else west
                 center_north = pass_north + self.turn_radius_m
-                if going_east:      # round the east side: bearing 180 -> 90 -> 0
+                if going_east:  # round the east side: bearing 180 -> 90 -> 0
                     bearing = 180.0 - 180.0 * fraction
                     heading = bearing - 90.0
-                else:               # round the west side: bearing 180 -> 270 -> 360
+                else:  # round the west side: bearing 180 -> 270 -> 360
                     bearing = 180.0 + 180.0 * fraction
                     heading = bearing + 90.0
                 b = math.radians(bearing)
-                return (center_east + self.turn_radius_m * math.sin(b),
-                        center_north + self.turn_radius_m * math.cos(b),
-                        heading % 360.0)
+                return (
+                    center_east + self.turn_radius_m * math.sin(b),
+                    center_north + self.turn_radius_m * math.cos(b),
+                    heading % 360.0,
+                )
             along -= turn_length
 
         raise AssertionError("unreachable: the last pass returns above")

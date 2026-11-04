@@ -44,7 +44,7 @@ from embereye.prediction.terrain import Terrain
 # ---------------------------------------------------------------------------
 # Fuel
 # ---------------------------------------------------------------------------
-NON_BURNABLE = 99   # water, roads, bare rock — fire cannot enter these cells
+NON_BURNABLE = 99  # water, roads, bare rock — fire cannot enter these cells
 
 # Fuel types (numbered like the Anderson 13 fuel models) and their base rate
 # of spread in metres per minute on flat ground with no wind.
@@ -53,30 +53,36 @@ NON_BURNABLE = 99   # water, roads, bare rock — fire cannot enter these cells
 # They have not been calibrated against published fuel-model data, so treat
 # real-world predictions made with them as illustrative only.
 FUEL_MODELS = {
-    1:  {"name": "short_grass",       "ros_ref": 2.5, "heat_kj_m2": 700},
-    2:  {"name": "timber_grass",      "ros_ref": 1.8, "heat_kj_m2": 900},
-    3:  {"name": "tall_grass",        "ros_ref": 4.5, "heat_kj_m2": 500},
-    4:  {"name": "chaparral",         "ros_ref": 4.0, "heat_kj_m2": 2500},
-    5:  {"name": "brush",             "ros_ref": 1.0, "heat_kj_m2": 700},
-    6:  {"name": "dormant_brush",     "ros_ref": 1.5, "heat_kj_m2": 600},
-    7:  {"name": "southern_rough",    "ros_ref": 1.2, "heat_kj_m2": 800},
-    8:  {"name": "timber_litter",     "ros_ref": 0.3, "heat_kj_m2": 400},
-    9:  {"name": "hardwood_litter",   "ros_ref": 0.5, "heat_kj_m2": 500},
+    1: {"name": "short_grass", "ros_ref": 2.5, "heat_kj_m2": 700},
+    2: {"name": "timber_grass", "ros_ref": 1.8, "heat_kj_m2": 900},
+    3: {"name": "tall_grass", "ros_ref": 4.5, "heat_kj_m2": 500},
+    4: {"name": "chaparral", "ros_ref": 4.0, "heat_kj_m2": 2500},
+    5: {"name": "brush", "ros_ref": 1.0, "heat_kj_m2": 700},
+    6: {"name": "dormant_brush", "ros_ref": 1.5, "heat_kj_m2": 600},
+    7: {"name": "southern_rough", "ros_ref": 1.2, "heat_kj_m2": 800},
+    8: {"name": "timber_litter", "ros_ref": 0.3, "heat_kj_m2": 400},
+    9: {"name": "hardwood_litter", "ros_ref": 0.5, "heat_kj_m2": 500},
     10: {"name": "timber_understory", "ros_ref": 2.0, "heat_kj_m2": 2800},
-    11: {"name": "light_slash",       "ros_ref": 1.5, "heat_kj_m2": 1200},
-    12: {"name": "medium_slash",      "ros_ref": 2.5, "heat_kj_m2": 1800},
-    13: {"name": "heavy_slash",       "ros_ref": 3.5, "heat_kj_m2": 2500},
+    11: {"name": "light_slash", "ros_ref": 1.5, "heat_kj_m2": 1200},
+    12: {"name": "medium_slash", "ros_ref": 2.5, "heat_kj_m2": 1800},
+    13: {"name": "heavy_slash", "ros_ref": 3.5, "heat_kj_m2": 2500},
     NON_BURNABLE: {"name": "non_burnable", "ros_ref": 0.0, "heat_kj_m2": 0},
 }
 
-MPH_TO_MS = 0.447       # miles per hour -> metres per second
+MPH_TO_MS = 0.447  # miles per hour -> metres per second
 MIN_ROS_M_PER_MIN = 0.01  # burnable fuel never drops below this spread rate
 
 # The 8 neighbours of a cell, as (row step, column step). Rows count
 # southward, so a row step of -1 is a move NORTH.
 NEIGHBORS = [
-    (-1, 0), (1, 0), (0, -1), (0, 1),       # N, S, W, E
-    (-1, -1), (-1, 1), (1, -1), (1, 1),     # NW, NE, SW, SE
+    (-1, 0),
+    (1, 0),
+    (0, -1),
+    (0, 1),  # N, S, W, E
+    (-1, -1),
+    (-1, 1),
+    (1, -1),
+    (1, 1),  # NW, NE, SW, SE
 ]
 
 
@@ -87,9 +93,9 @@ NEIGHBORS = [
 class Weather:
     """The weather inputs the spread model uses."""
 
-    wind_speed_mph:    float
-    wind_to_deg:       float            # compass direction the wind blows TOWARDS (it pushes fire this way)
-    fuel_moisture_pct: float = 8.0      # how damp the dead vegetation is; 8% is the reference "dry" value
+    wind_speed_mph: float
+    wind_to_deg: float  # compass direction the wind blows TOWARDS (it pushes fire this way)
+    fuel_moisture_pct: float = 8.0  # how damp the dead vegetation is; 8% is the reference "dry" value
 
     @property
     def wind_from_deg(self) -> float:
@@ -115,15 +121,13 @@ class SpreadPredictor:
     """
 
     def __init__(self, terrain: Terrain, fuel_codes: np.ndarray, weather: Weather) -> None:
-        self.terrain     = terrain
-        self.fuel_codes  = np.asarray(fuel_codes, dtype=int)
-        self.weather     = weather
+        self.terrain = terrain
+        self.fuel_codes = np.asarray(fuel_codes, dtype=int)
+        self.weather = weather
         self.cell_size_m = terrain.cell_size_m
 
         if self.fuel_codes.shape != terrain.shape:
-            raise ValueError(
-                f"fuel_codes shape {self.fuel_codes.shape} does not match terrain shape {terrain.shape}"
-            )
+            raise ValueError(f"fuel_codes shape {self.fuel_codes.shape} does not match terrain shape {terrain.shape}")
         self.rows, self.cols = terrain.shape
 
         # Base spread rate for every cell, looked up from its fuel code.
@@ -171,7 +175,7 @@ class SpreadPredictor:
         wind_alignment = math.cos(math.radians(self.weather.wind_to_deg - spread_dir))
         wind_ms = self.weather.wind_speed_mph * MPH_TO_MS
         if wind_alignment > 0:
-            wind_factor = 1 + 0.5 * (wind_ms ** 1.2) * wind_alignment
+            wind_factor = 1 + 0.5 * (wind_ms**1.2) * wind_alignment
         else:
             wind_factor = 1 / (1 + 0.3 * wind_ms * abs(wind_alignment))
 
@@ -179,7 +183,7 @@ class SpreadPredictor:
         # Aspect points downhill, so spreading opposite to it is uphill.
         tan_slope = np.tan(np.radians(self.terrain.slope))
         uphill_alignment = np.cos(np.radians(self.terrain.aspect - spread_dir + 180.0))
-        uphill_factor   = 1 + 5.275 * tan_slope ** 2 * uphill_alignment
+        uphill_factor = 1 + 5.275 * tan_slope**2 * uphill_alignment
         downhill_factor = 1 / (1 + 2.0 * tan_slope * np.abs(uphill_alignment))
         slope_factor = np.where(uphill_alignment > 0, uphill_factor, downhill_factor)
 
@@ -229,8 +233,7 @@ class SpreadPredictor:
 
         # heapq keeps a list ordered so that the smallest item pops first.
         # Each item is (arrival_time, row, col).
-        queue = [(float(arrival[row, col]), int(row), int(col))
-                 for row, col in np.argwhere(np.isfinite(arrival))]
+        queue = [(float(arrival[row, col]), int(row), int(col)) for row, col in np.argwhere(np.isfinite(arrival))]
         heapq.heapify(queue)
 
         while queue:

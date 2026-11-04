@@ -38,7 +38,7 @@ from embereye.masks import mask_to_polygons
 
 # src/embereye/data/flame2.py -> parents[3] is the project folder.
 FLAME2_DIR = Path(__file__).resolve().parents[3] / "data" / "flame2"
-IMAGE_SIZE = 254    # every FLAME 2 frame is 254 x 254 pixels
+IMAGE_SIZE = 254  # every FLAME 2 frame is 254 x 254 pixels
 
 INFERNO = "inferno"
 RAINBOW = "rainbow"
@@ -106,7 +106,7 @@ def load_frame(frame_num: int, root: Path = FLAME2_DIR) -> tuple[np.ndarray, np.
 # Heat position: where on its palette each pixel's colour sits
 # ---------------------------------------------------------------------------
 _INFERNO_LOOKUP: Optional[tuple[np.ndarray, np.ndarray]] = None
-_LOOKUP_STEP = 4    # colours are rounded to steps of 4 (64 levels per channel) for the lookup table
+_LOOKUP_STEP = 4  # colours are rounded to steps of 4 (64 levels per channel) for the lookup table
 
 
 def _inferno_lookup() -> tuple[np.ndarray, np.ndarray]:
@@ -130,12 +130,12 @@ def _inferno_lookup() -> tuple[np.ndarray, np.ndarray]:
 
         position = np.empty(len(colours), dtype=np.float32)
         distance = np.empty(len(colours), dtype=np.float32)
-        for start in range(0, len(colours), 16384):          # in chunks to keep memory small
-            chunk = colours[start:start + 16384]
+        for start in range(0, len(colours), 16384):  # in chunks to keep memory small
+            chunk = colours[start : start + 16384]
             d2 = ((chunk[:, None, :] - palette_bgr[None, :, :]) ** 2).sum(axis=-1)
             nearest = d2.argmin(axis=1)
-            position[start:start + 16384] = nearest / 255.0
-            distance[start:start + 16384] = np.sqrt(d2[np.arange(len(chunk)), nearest])
+            position[start : start + 16384] = nearest / 255.0
+            distance[start : start + 16384] = np.sqrt(d2[np.arange(len(chunk)), nearest])
         n = len(levels)
         _INFERNO_LOOKUP = (position.reshape(n, n, n), distance.reshape(n, n, n))
     return _INFERNO_LOOKUP
@@ -164,7 +164,7 @@ def rainbow_position(thermal_bgr: np.ndarray) -> np.ndarray:
     position near 1). That is why the wrap is placed exactly at pure red.
     """
     hsv = cv2.cvtColor(thermal_bgr, cv2.COLOR_BGR2HSV)
-    hue_deg = hsv[..., 0].astype(np.float32) * 2          # OpenCV stores hue as 0..179 (degrees / 2)
+    hue_deg = hsv[..., 0].astype(np.float32) * 2  # OpenCV stores hue as 0..179 (degrees / 2)
     position = ((360.0 - hue_deg) % 360.0) / 360.0
     # Grey pixels have no meaningful hue; treat them as cold.
     position[hsv[..., 1] < 40] = 0.0
@@ -293,7 +293,7 @@ def hot_mask(
 
     n, labels, stats, _ = cv2.connectedComponentsWithStats(hot.astype(np.uint8), connectivity=8)
     keep = np.zeros(n, dtype=bool)
-    keep[1:] = stats[1:, cv2.CC_STAT_AREA] >= min_area_px     # label 0 is the background
+    keep[1:] = stats[1:, cv2.CC_STAT_AREA] >= min_area_px  # label 0 is the background
     return keep[labels]
 
 

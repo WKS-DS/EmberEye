@@ -4,6 +4,7 @@ The most important ones check that the simulator's "answer key" is
 trustworthy: the camera pose it reports really is the pose the picture was
 taken from, and the fire mask really shows the cells that are burning.
 """
+
 import asyncio
 
 import cv2
@@ -112,9 +113,9 @@ def test_lawnmower_keeps_altitude_and_pitch_and_stays_on_its_rectangle():
 
 def test_lawnmower_passes_alternate_direction():
     south = -(MOWER.n_passes - 1) * MOWER.spacing_m / 2
-    leg = MOWER.width_m + np.pi * MOWER.turn_radius_m     # one pass plus the turn after it
+    leg = MOWER.width_m + np.pi * MOWER.turn_radius_m  # one pass plus the turn after it
     for i in range(MOWER.n_passes):
-        point = MOWER.at((i * leg + MOWER.width_m / 2) / MOWER.speed_mps)    # middle of pass i
+        point = MOWER.at((i * leg + MOWER.width_m / 2) / MOWER.speed_mps)  # middle of pass i
         assert point.north_m == pytest.approx(south + i * MOWER.spacing_m)
         assert point.east_m == pytest.approx(0.0, abs=1e-9)
         assert point.heading_deg == pytest.approx(90.0 if i % 2 == 0 else 270.0)
@@ -125,9 +126,9 @@ def test_lawnmower_moves_smoothly_in_the_direction_it_faces():
     for time_s in np.arange(0, 2.2 * MOWER.pattern_length_m / MOWER.speed_mps, dt):
         a, b = MOWER.at(float(time_s)), MOWER.at(float(time_s + dt))
         step = np.hypot(b.east_m - a.east_m, b.north_m - a.north_m)
-        assert step <= MOWER.speed_mps * dt + 1e-6          # never jumps
+        assert step <= MOWER.speed_mps * dt + 1e-6  # never jumps
         if step < 0.5 * MOWER.speed_mps * dt:
-            continue                                         # straddles the end of the pattern, where it turns back
+            continue  # straddles the end of the pattern, where it turns back
         travel_deg = np.degrees(np.arctan2(b.east_m - a.east_m, b.north_m - a.north_m)) % 360
         facing_deg = MOWER.at(float(time_s + dt / 2)).heading_deg
         assert abs((travel_deg - facing_deg + 180) % 360 - 180) < 2.0
@@ -180,7 +181,7 @@ def test_reported_pose_matches_the_rendered_image(sim, time_s):
     obs = sim.observe(time_s)
     grid = sim.scenario.grid
 
-    ys, xs = np.mgrid[0:CAMERA.height, 0:CAMERA.width]
+    ys, xs = np.mgrid[0 : CAMERA.height, 0 : CAMERA.width]
     rays = CAMERA.pixel_rays(obs.pose, xs, ys)
     looks_down = rays[..., 2] < -1e-6
 
@@ -212,7 +213,7 @@ def test_pose_is_reported_consistently(sim):
     assert east == pytest.approx(pose.east_m, abs=1e-6)
     assert north == pytest.approx(pose.north_m, abs=1e-6)
     assert pose.alt_msl_m == pytest.approx(frame.origin_alt_m + pose.up_m)
-    assert pose.alt_agl_m == pytest.approx(pose.up_m)       # flat ground at up = 0
+    assert pose.alt_agl_m == pytest.approx(pose.up_m)  # flat ground at up = 0
     assert np.allclose(pose.rotation, look_rotation(pose.heading_deg, pose.pitch_deg), atol=1e-9)
 
 
@@ -270,8 +271,8 @@ def test_fire_polygons_outline_the_mask(sim):
 
 def test_mask_to_polygons_drops_specks():
     mask = np.zeros((50, 50), dtype=bool)
-    mask[10:30, 10:30] = True       # a real region
-    mask[40, 40] = True             # a single stray pixel
+    mask[10:30, 10:30] = True  # a real region
+    mask[40, 40] = True  # a single stray pixel
     polygons = mask_to_polygons(mask)
     assert len(polygons) == 1
 
@@ -282,7 +283,7 @@ def test_fire_grows_then_burns_out(sim):
     touched_early = early != UNBURNED
     touched_later = later != UNBURNED
     assert touched_later.sum() > touched_early.sum()
-    assert touched_later[touched_early].all()       # fire never un-burns
+    assert touched_later[touched_early].all()  # fire never un-burns
 
     # A cell stays alight for burn_duration_min, then counts as burned out.
     arrival = sim.truth.arrival_time
@@ -309,7 +310,7 @@ def test_run_yields_frames_at_the_requested_interval(sim):
 
 def test_no_fire_is_an_error():
     scenario = make_scenario()
-    scenario.ignition_cells = [(999, 999)]      # off the grid
+    scenario.ignition_cells = [(999, 999)]  # off the grid
     with pytest.raises(ValueError, match="no fire"):
         FireSim(scenario, PATH, CAMERA)
 
@@ -361,8 +362,8 @@ def test_hill_hides_part_of_the_fire_from_part_of_the_orbit(hard_lap):
         distance_shown = np.where(shown >= 0, np.linalg.norm(centers[shown] - obs.pose.position, axis=1), np.inf)
         hidden_counts.append(int((distance_shown < distance_burning - 50.0).sum()))
 
-    assert max(hidden_counts) > 100      # from some of the orbit, much of the fire is behind the hill
-    assert min(hidden_counts) == 0       # from elsewhere, none of it is
+    assert max(hidden_counts) > 100  # from some of the orbit, much of the fire is behind the hill
+    assert min(hidden_counts) == 0  # from elsewhere, none of it is
 
 
 def test_preview_keeps_the_grid_shape_for_non_square_grids():
