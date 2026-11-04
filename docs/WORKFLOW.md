@@ -21,12 +21,12 @@
 ## 2. Checks
 
 **On every commit (pre-commit).** One-time setup is `pre-commit install`. To run every check over the whole repo: `pre-commit run --all-files`.
-- **ruff:** lint. Formatting follows in its own PR.
+- **ruff:** lint, then format (Python, notebooks, and the Python examples in Markdown).
 - **gitleaks:** blocks anything that looks like a key or token.
 - **nbstripout:** strips notebook outputs, so no images, data previews or file paths get committed.
 - **Large-file check:** blocks files over 5 MB.
 
-**On every pull request (GitHub Actions, `.github/workflows/ci.yml`).** It runs `ruff check` and `pytest` on Python 3.11 (Ubuntu). MuJoCo renders in software (OSMesa), since the runner has no screen.
+**On every pull request (GitHub Actions, `.github/workflows/ci.yml`).** It runs `ruff check`, `ruff format --check` and `pytest` on Python 3.11 (Ubuntu). MuJoCo renders in software (OSMesa), since the runner has no screen.
 
 ---
 
