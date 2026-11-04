@@ -31,14 +31,14 @@ SPLITS = ("train", "val", "test")
 
 # (first frame, last frame, split), in timeline order.
 VAL_TEST_BLOCKS: list[tuple[int, int, str]] = [
-    (1, 1300, "test"),          # no-fire, start of the flight
-    (6801, 8100, "val"),        # no-fire, middle of the 1-13700 run
-    (14500, 14899, "test"),     # inferno: 200 YY (block 13701-14699) + 200 YN (block 14700-15980)
-    (15800, 16199, "val"),      # inferno: 181 YN + 219 YY (block 15981-19802)
-    (23300, 24999, "val"),      # early rainbow, YY, red and magenta backgrounds
-    (27100, 28899, "test"),     # rainbow YN (block 27184-27514) and YY, both backgrounds
-    (40500, 42299, "val"),      # rainbow YN (to 41642) then YY, both backgrounds
-    (51650, 53451, "test"),     # end of the flight: rainbow YY and YN, both backgrounds
+    (1, 1300, "test"),  # no-fire, start of the flight
+    (6801, 8100, "val"),  # no-fire, middle of the 1-13700 run
+    (14500, 14899, "test"),  # inferno: 200 YY (block 13701-14699) + 200 YN (block 14700-15980)
+    (15800, 16199, "val"),  # inferno: 181 YN + 219 YY (block 15981-19802)
+    (23300, 24999, "val"),  # early rainbow, YY, red and magenta backgrounds
+    (27100, 28899, "test"),  # rainbow YN (block 27184-27514) and YY, both backgrounds
+    (40500, 42299, "val"),  # rainbow YN (to 41642) then YY, both backgrounds
+    (51650, 53451, "test"),  # end of the flight: rainbow YY and YN, both backgrounds
 ]
 
 

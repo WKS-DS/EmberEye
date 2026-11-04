@@ -88,8 +88,16 @@ def candidates(blocks) -> list[dict]:
         variant = f2.palette_variant(thermal)
         if variant == f2.UNKNOWN:
             continue
-        rows.append({"frame": n, "block": f"{first}-{last}", "flag": flag, "variant": variant,
-                     "stratum": f"{variant} {flag}", "thumb": thumbnail(thermal)})
+        rows.append(
+            {
+                "frame": n,
+                "block": f"{first}-{last}",
+                "flag": flag,
+                "variant": variant,
+                "stratum": f"{variant} {flag}",
+                "thumb": thumbnail(thermal),
+            }
+        )
     return rows
 
 
@@ -125,11 +133,15 @@ def pick(pool: list[dict], per_stratum: int) -> list[dict]:
         return [c for c in pool if c not in chosen and all(c[k] == v for k, v in match.items())]
 
     # 1. Every block covered.
-    blocks = sorted({c["block"] for c in pool}, key=lambda b: (len({c["stratum"] for c in pool if c["block"] == b}),
-                                                               int(b.split("-")[0])))
+    blocks = sorted(
+        {c["block"] for c in pool},
+        key=lambda b: (len({c["stratum"] for c in pool if c["block"] == b}), int(b.split("-")[0])),
+    )
     for block in blocks:
-        strata = sorted({c["stratum"] for c in unpicked(block=block) if room(c["stratum"]) > 0},
-                        key=lambda s: (per_stratum - room(s), STRATA.index(s)))
+        strata = sorted(
+            {c["stratum"] for c in unpicked(block=block) if room(c["stratum"]) > 0},
+            key=lambda s: (per_stratum - room(s), STRATA.index(s)),
+        )
         if not strata:
             warnings.warn(f"Block {block} not covered: its strata are already full")
             continue
@@ -191,8 +203,10 @@ def main() -> None:
         print(f"  {stratum:<20} {len(frames):>2}  {frames}")
     all_blocks = {c["block"] for c in pool}
     covered = {c["block"] for c in chosen}
-    print(f"\n  blocks covered: {len(covered)} of {len(all_blocks)}"
-          f"   frames from {LATE_FROM} on: {sum(c['frame'] >= LATE_FROM for c in chosen)}")
+    print(
+        f"\n  blocks covered: {len(covered)} of {len(all_blocks)}"
+        f"   frames from {LATE_FROM} on: {sum(c['frame'] >= LATE_FROM for c in chosen)}"
+    )
 
 
 if __name__ == "__main__":

@@ -26,8 +26,8 @@ from embereye.sim.camera import CameraModel, look_rotation
 
 CAMERA_NAME = "drone_cam"
 
-OUTSKIRTS_RGB = (0.33, 0.38, 0.24)   # ground beyond the edge of the grid
-TILE_DEPTH_M  = 1.0                  # how far each tile extends below the lowest ground
+OUTSKIRTS_RGB = (0.33, 0.38, 0.24)  # ground beyond the edge of the grid
+TILE_DEPTH_M = 1.0  # how far each tile extends below the lowest ground
 
 
 def build_world_xml(grid: GroundGrid, terrain: Terrain, camera: CameraModel) -> str:
@@ -44,7 +44,7 @@ def build_world_xml(grid: GroundGrid, terrain: Terrain, camera: CameraModel) -> 
     for row in range(grid.rows):
         for col in range(grid.cols):
             top = float(terrain.elevation[row, col])
-            center_up   = (top + bottom) / 2
+            center_up = (top + bottom) / 2
             half_height = (top - bottom) / 2
             tiles.append(
                 f'    <geom name="tile_{row}_{col}" type="box" '
@@ -99,12 +99,12 @@ class FireWorld:
         if terrain.shape != grid.shape:
             raise ValueError(f"terrain shape {terrain.shape} does not match grid shape {grid.shape}")
 
-        self.grid    = grid
+        self.grid = grid
         self.terrain = terrain
-        self.camera  = camera
+        self.camera = camera
 
         self.model = mujoco.MjModel.from_xml_string(build_world_xml(grid, terrain, camera))
-        self.data  = mujoco.MjData(self.model)
+        self.data = mujoco.MjData(self.model)
         self.renderer = mujoco.Renderer(
             self.model,
             height=camera.height,
@@ -118,7 +118,7 @@ class FireWorld:
         # and tile number k is grid cell (k // cols, k % cols).
         n_cells = grid.rows * grid.cols
         first = self.model.geom("tile_0_0").id
-        last  = self.model.geom(f"tile_{grid.rows - 1}_{grid.cols - 1}").id
+        last = self.model.geom(f"tile_{grid.rows - 1}_{grid.cols - 1}").id
         if last - first != n_cells - 1:
             raise RuntimeError("Tile ids are not consecutive; cannot map pixels to grid cells.")
         self._tile_geom_ids = np.arange(first, first + n_cells)
@@ -152,9 +152,9 @@ class FireWorld:
         quat = np.zeros(4)
         mujoco.mju_mat2Quat(quat, rotation.flatten())
 
-        self.data.mocap_pos[0]  = (east_m, north_m, up_m)
+        self.data.mocap_pos[0] = (east_m, north_m, up_m)
         self.data.mocap_quat[0] = quat
-        mujoco.mj_forward(self.model, self.data)    # update everything that depends on the new pose
+        mujoco.mj_forward(self.model, self.data)  # update everything that depends on the new pose
 
         position = self.data.cam_xpos[self._camera_id].copy()
         rotation = self.data.cam_xmat[self._camera_id].reshape(3, 3).copy()
@@ -178,7 +178,7 @@ class FireWorld:
         segmentation = self.renderer.render()
         self.renderer.disable_segmentation_rendering()
 
-        object_ids   = segmentation[..., 0]
+        object_ids = segmentation[..., 0]
         object_types = segmentation[..., 1]
         is_geom = object_types == int(mujoco.mjtObj.mjOBJ_GEOM)
 

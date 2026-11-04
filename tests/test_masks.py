@@ -1,4 +1,5 @@
 """Tests for the shared mask helpers (embereye/masks.py)."""
+
 import numpy as np
 
 from embereye.masks import iou, mask_to_polygons, polygons_to_mask
@@ -7,7 +8,7 @@ from embereye.masks import iou, mask_to_polygons, polygons_to_mask
 def test_polygons_to_mask_fills_a_square():
     square = np.array([[10, 10], [19, 10], [19, 19], [10, 19]], dtype=float)
     mask = polygons_to_mask([square], (32, 32))
-    assert mask.sum() == 100                    # pixels 10..19 in both directions
+    assert mask.sum() == 100  # pixels 10..19 in both directions
     assert mask[10, 10] and mask[19, 19] and not mask[20, 20]
 
 
@@ -26,8 +27,8 @@ def test_polygons_to_mask_skips_degenerate_shapes():
 def test_iou():
     a = np.zeros((10, 10), dtype=bool)
     b = np.zeros((10, 10), dtype=bool)
-    a[0:4, 0:5] = True      # 20 pixels
-    b[2:6, 0:5] = True      # 20 pixels, 10 shared
+    a[0:4, 0:5] = True  # 20 pixels
+    b[2:6, 0:5] = True  # 20 pixels, 10 shared
     assert iou(a, b) == 10 / 30
     assert iou(a, a) == 1.0
     assert iou(a, ~a) == 0.0

@@ -33,22 +33,22 @@ class SimAdapter(DroneAdapter):
 
     def __init__(
         self,
-        scenario: Optional[Scenario] = None,        # None = the built-in demo fire
-        path: Optional[CameraPath] = None,          # None = the default orbit
+        scenario: Optional[Scenario] = None,  # None = the built-in demo fire
+        path: Optional[CameraPath] = None,  # None = the default orbit
         camera: Optional[CameraModel] = None,
-        duration_s: float = 600.0,                  # length of the simulated flight
-        frame_interval_s: float = 1.0,              # simulated seconds between frames
-        realtime: bool = False,                     # True = wait between frames like a live feed
+        duration_s: float = 600.0,  # length of the simulated flight
+        frame_interval_s: float = 1.0,  # simulated seconds between frames
+        realtime: bool = False,  # True = wait between frames like a live feed
     ) -> None:
-        self.scenario         = scenario if scenario is not None else demo_scenario()
-        self.path             = path if path is not None else OrbitPath()
-        self.camera           = camera if camera is not None else CameraModel()
-        self.duration_s       = duration_s
+        self.scenario = scenario if scenario is not None else demo_scenario()
+        self.path = path if path is not None else OrbitPath()
+        self.camera = camera if camera is not None else CameraModel()
+        self.duration_s = duration_s
         self.frame_interval_s = frame_interval_s
-        self.realtime         = realtime
+        self.realtime = realtime
 
-        self.sim:    Optional[FireSim]        = None
-        self.latest: Optional[SimObservation] = None   # answer key for the most recent Frame
+        self.sim: Optional[FireSim] = None
+        self.latest: Optional[SimObservation] = None  # answer key for the most recent Frame
 
     # ---------------------------------------------------------------- setup
     async def connect(self) -> None:
@@ -83,7 +83,7 @@ class SimAdapter(DroneAdapter):
             position=GeoPoint(lat=pose.lat, lon=pose.lon, alt_m=pose.alt_msl_m),
             heading_deg=pose.heading_deg,
             gimbal_pitch=pose.pitch_deg,
-            gimbal_yaw=0.0,             # the camera always faces the way the drone is heading
+            gimbal_yaw=0.0,  # the camera always faces the way the drone is heading
         )
         return Frame(
             ts=obs.ts,

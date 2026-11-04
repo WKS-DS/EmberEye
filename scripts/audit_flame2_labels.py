@@ -35,8 +35,8 @@ import numpy as np
 from embereye.data import flame2 as f2
 
 SAMPLE_EVERY = 50
-GATE = 0.25                 # max_frame_median value tried as the optional frame-level gate
-FLAME_MIN_PX = 15           # a frame "clearly shows flame" with at least this many flame pixels
+GATE = 0.25  # max_frame_median value tried as the optional frame-level gate
+FLAME_MIN_PX = 15  # a frame "clearly shows flame" with at least this many flame pixels
 OUT = f2.FLAME2_DIR / "audit"
 
 
@@ -130,17 +130,19 @@ def coverage(blocks) -> tuple[list[dict], dict]:
                 new_area.append(100 * new.mean())
             if gated.any():
                 gated_any += 1
-        rows.append({
-            "block": f"{first}-{last}",
-            "flags": flags,
-            "sampled": len(frames),
-            "palettes": " ".join(f"{k}:{v}" for k, v in sorted(palettes.items())),
-            "old_frames_with_mask_pct": round(100 * old_any / len(frames), 1),
-            "new_frames_with_mask_pct": round(100 * new_any / len(frames), 1),
-            "gated_frames_with_mask_pct": round(100 * gated_any / len(frames), 1),
-            "old_median_area_pct": round(float(np.median(old_area)), 2) if old_area else 0.0,
-            "new_median_area_pct": round(float(np.median(new_area)), 2) if new_area else 0.0,
-        })
+        rows.append(
+            {
+                "block": f"{first}-{last}",
+                "flags": flags,
+                "sampled": len(frames),
+                "palettes": " ".join(f"{k}:{v}" for k, v in sorted(palettes.items())),
+                "old_frames_with_mask_pct": round(100 * old_any / len(frames), 1),
+                "new_frames_with_mask_pct": round(100 * new_any / len(frames), 1),
+                "gated_frames_with_mask_pct": round(100 * gated_any / len(frames), 1),
+                "old_median_area_pct": round(float(np.median(old_area)), 2) if old_area else 0.0,
+                "new_median_area_pct": round(float(np.median(new_area)), 2) if new_area else 0.0,
+            }
+        )
     with open(OUT / "coverage.csv", "w", newline="") as fh:
         writer = csv.DictWriter(fh, fieldnames=list(rows[0]))
         writer.writeheader()
@@ -255,18 +257,35 @@ def alignment(labels, n_frames: int = 10, min_gap: int = 200) -> list[dict]:
         heat_random = np.mean([heat_at(heat, xs + dx, ys + dy).mean() for dx, dy in shifts])
         best_heat, scale, dx, dy = best_transform(heat, xs, ys)
 
-        rows.append({
-            "frame": n, "palette": palette, "flame_px": len(xs),
-            "flame_on_hot_pct": round(100 * hit_as_is, 1), "chance_pct": round(100 * hit_random, 1),
-            "heat_under_flame": round(float(heat_as_is), 2), "heat_chance": round(float(heat_random), 2),
-            "best_scale": round(scale, 2), "best_dx": dx, "best_dy": dy, "heat_best": round(best_heat, 2),
-        })
+        rows.append(
+            {
+                "frame": n,
+                "palette": palette,
+                "flame_px": len(xs),
+                "flame_on_hot_pct": round(100 * hit_as_is, 1),
+                "chance_pct": round(100 * hit_random, 1),
+                "heat_under_flame": round(float(heat_as_is), 2),
+                "heat_chance": round(float(heat_random), 2),
+                "best_scale": round(scale, 2),
+                "best_dx": dx,
+                "best_dy": dy,
+                "heat_best": round(best_heat, 2),
+            }
+        )
 
         marked = rgb.copy()
         marked[ys, xs] = (255, 0, 255)
         tile = np.hstack([outline(marked, hot), outline(thermal, hot), thermal])
-        cv2.putText(tile, f"{n}: RGB flame (magenta) vs thermal hot outline (cyan), as-is", (4, 14),
-                    cv2.FONT_HERSHEY_SIMPLEX, 0.4, (255, 255, 255), 1, cv2.LINE_AA)
+        cv2.putText(
+            tile,
+            f"{n}: RGB flame (magenta) vs thermal hot outline (cyan), as-is",
+            (4, 14),
+            cv2.FONT_HERSHEY_SIMPLEX,
+            0.4,
+            (255, 255, 255),
+            1,
+            cv2.LINE_AA,
+        )
         tiles.append(tile)
 
     if tiles:
@@ -293,7 +312,9 @@ def false_positive_rate(labels, per_frame) -> dict:
         "old_fp_pct": round(100 * len(old_fp) / len(no_fire), 1),
         "new_fp_pct": round(100 * len(new_fp) / len(no_fire), 1),
         "gated_fp_pct": round(100 * len(gated_fp) / len(no_fire), 1),
-        "new_fp_median_area_pct": round(float(np.median([100 * per_frame[n][1] for n in new_fp])), 2) if new_fp else 0.0,
+        "new_fp_median_area_pct": round(float(np.median([100 * per_frame[n][1] for n in new_fp])), 2)
+        if new_fp
+        else 0.0,
     }
 
 
@@ -316,7 +337,11 @@ def main() -> None:
 
     print("1/5 palette scan (every 200th fire frame)")
     scan = palette_scan(labels)
-    switches = [(a["frame"], b["frame"], a["palette"], b["palette"]) for a, b in zip(scan, scan[1:]) if a["palette"] != b["palette"]]
+    switches = [
+        (a["frame"], b["frame"], a["palette"], b["palette"])
+        for a, b in zip(scan, scan[1:])
+        if a["palette"] != b["palette"]
+    ]
 
     print(f"2/5 coverage (every {SAMPLE_EVERY}th frame)")
     cov, per_frame = coverage(blocks)
@@ -346,22 +371,52 @@ def main() -> None:
     ]:
         medians = np.array([per_frame[n][4] for n in members])
         p10, p50, p90 = np.percentile(medians, [10, 50, 90])
-        heat_rows.append({"frames": name, "count": len(members),
-                          "median_heat_p10": round(p10, 2), "median_heat_p50": round(p50, 2), "median_heat_p90": round(p90, 2),
-                          f"share_above_gate_{GATE}": f"{100 * (medians > GATE).mean():.1f}%"})
+        heat_rows.append(
+            {
+                "frames": name,
+                "count": len(members),
+                "median_heat_p10": round(p10, 2),
+                "median_heat_p50": round(p50, 2),
+                "median_heat_p90": round(p90, 2),
+                f"share_above_gate_{GATE}": f"{100 * (medians > GATE).mean():.1f}%",
+            }
+        )
 
     report = [
-        "# FLAME 2 label audit", "",
-        f"Sampled every {SAMPLE_EVERY}th frame. New method: `hot_mask` with default parameters.", "",
-        "## Palette switches (every 200th fire frame)", "",
-        *(f"- between frames {a} and {b}: {pa} -> {pb}" for a, b, pa, pb in switches), "",
-        "## All fire frames", "", markdown_table([totals]), "",
-        f"`gated` = new method plus the optional frame gate (`max_frame_median={GATE}`).", "",
-        "## Frame median heat position (why the gate works)", "", markdown_table(heat_rows), "",
-        "## Coverage per labels.txt block", "", markdown_table(cov), "",
-        "## False positives on no-fire frames (1-13700)", "", markdown_table([fp]), "",
-        "## RGB / thermal alignment", "", markdown_table(align) if align else "No frames with clear flame found.", "",
-        "## Pictures", "", *(f"- {p}" for p in pictures + (["alignment.png"] if align else [])), "",
+        "# FLAME 2 label audit",
+        "",
+        f"Sampled every {SAMPLE_EVERY}th frame. New method: `hot_mask` with default parameters.",
+        "",
+        "## Palette switches (every 200th fire frame)",
+        "",
+        *(f"- between frames {a} and {b}: {pa} -> {pb}" for a, b, pa, pb in switches),
+        "",
+        "## All fire frames",
+        "",
+        markdown_table([totals]),
+        "",
+        f"`gated` = new method plus the optional frame gate (`max_frame_median={GATE}`).",
+        "",
+        "## Frame median heat position (why the gate works)",
+        "",
+        markdown_table(heat_rows),
+        "",
+        "## Coverage per labels.txt block",
+        "",
+        markdown_table(cov),
+        "",
+        "## False positives on no-fire frames (1-13700)",
+        "",
+        markdown_table([fp]),
+        "",
+        "## RGB / thermal alignment",
+        "",
+        markdown_table(align) if align else "No frames with clear flame found.",
+        "",
+        "## Pictures",
+        "",
+        *(f"- {p}" for p in pictures + (["alignment.png"] if align else [])),
+        "",
     ]
     (OUT / "summary.md").write_text("\n".join(report))
     print("\n".join(report))
