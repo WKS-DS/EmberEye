@@ -1,4 +1,5 @@
 """Tests for the shared domain types (embereye/models/types.py)."""
+
 from datetime import datetime, timezone
 
 import numpy as np

@@ -45,18 +45,18 @@ class RecordedFootageAdapter(DroneAdapter):
     def __init__(
         self,
         recording_dir: str | Path,
-        playback_fps: Optional[float] = None,   # None = as fast as pipeline can consume
+        playback_fps: Optional[float] = None,  # None = as fast as pipeline can consume
         loop: bool = False,
     ) -> None:
-        self.recording_dir  = Path(recording_dir)
-        self.playback_fps   = playback_fps
-        self.loop           = loop
+        self.recording_dir = Path(recording_dir)
+        self.playback_fps = playback_fps
+        self.loop = loop
 
-        self._rgb_cap:      Optional[cv2.VideoCapture] = None
-        self._thermal_cap:  Optional[cv2.VideoCapture] = None
-        self._telemetry:    list[dict]                 = []
-        self._metadata:     dict                       = {}
-        self._start_ts:     Optional[datetime]         = None
+        self._rgb_cap: Optional[cv2.VideoCapture] = None
+        self._thermal_cap: Optional[cv2.VideoCapture] = None
+        self._telemetry: list[dict] = []
+        self._metadata: dict = {}
+        self._start_ts: Optional[datetime] = None
 
     # ---------------------------------------------------------------- setup
     async def connect(self) -> None:
@@ -111,8 +111,8 @@ class RecordedFootageAdapter(DroneAdapter):
         # Native frame interval (seconds) — used when playback_fps is None
         # and we're pacing to real time; also useful for timestamping.
         source_fps = self._rgb_cap.get(cv2.CAP_PROP_FPS) or 30.0
-        native_dt  = 1.0 / source_fps
-        target_dt  = 1.0 / self.playback_fps if self.playback_fps else 0.0
+        native_dt = 1.0 / source_fps
+        target_dt = 1.0 / self.playback_fps if self.playback_fps else 0.0
 
         # Two counters, because looping makes them differ:
         # - frame_idx: position within the recording (0, 1, 2, ... restarting
@@ -129,7 +129,7 @@ class RecordedFootageAdapter(DroneAdapter):
             # while it decodes. It could later move to asyncio.to_thread().
             ok, rgb = self._rgb_cap.read()
             if not ok:
-                if self.loop and frame_idx > 0:      # frame_idx == 0 means an empty video: nothing to loop
+                if self.loop and frame_idx > 0:  # frame_idx == 0 means an empty video: nothing to loop
                     self._rgb_cap.set(cv2.CAP_PROP_POS_FRAMES, 0)
                     if self._thermal_cap is not None:
                         self._thermal_cap.set(cv2.CAP_PROP_POS_FRAMES, 0)
@@ -157,7 +157,9 @@ class RecordedFootageAdapter(DroneAdapter):
                     # be decoded per platform — a job for the platform-specific
                     # adapter, not this one.
                     thermal_gray = cv2.cvtColor(thermal, cv2.COLOR_BGR2GRAY).astype(np.float32)
-                    yield self._build_frame(thermal_gray, SensorType.THERMAL, frame_idx, emitted, native_dt, loop_offset_s)
+                    yield self._build_frame(
+                        thermal_gray, SensorType.THERMAL, frame_idx, emitted, native_dt, loop_offset_s
+                    )
 
             frame_idx += 1
             emitted += 1

@@ -3,6 +3,7 @@
 Everything here uses small synthetic images made in the test, so the
 tests run without the real dataset in data/.
 """
+
 import cv2
 import matplotlib
 import numpy as np
@@ -33,14 +34,14 @@ def frame_with_square(background_bgr, square_bgr, top_left=(20, 20), side=16) ->
     frame = np.zeros((SIZE, SIZE, 3), dtype=np.uint8)
     frame[:] = np.clip(background_bgr, 0, 255).astype(np.uint8)
     y, x = top_left
-    frame[y:y + side, x:x + side] = np.clip(square_bgr, 0, 255).astype(np.uint8)
+    frame[y : y + side, x : x + side] = np.clip(square_bgr, 0, 255).astype(np.uint8)
     return frame
 
 
 def square_mask(top_left=(20, 20), side=16) -> np.ndarray:
     mask = np.zeros((SIZE, SIZE), dtype=bool)
     y, x = top_left
-    mask[y:y + side, x:x + side] = True
+    mask[y : y + side, x : x + side] = True
     return mask
 
 
@@ -48,7 +49,7 @@ def iou(a: np.ndarray, b: np.ndarray) -> float:
     return (a & b).sum() / max(1, (a | b).sum())
 
 
-RAINBOW_COLD = np.array([2, 0, 124], dtype=float)      # FLAME 2's dark-red rainbow background (BGR)
+RAINBOW_COLD = np.array([2, 0, 124], dtype=float)  # FLAME 2's dark-red rainbow background (BGR)
 
 
 # ---------------------------------------------------------------------------
@@ -66,18 +67,21 @@ def test_parse_labels_reads_ranges_and_skips_the_header(tmp_path):
     )
     labels = f2.parse_labels(path)
     assert labels == {
-        1: (False, False), 2: (False, False), 3: (False, False),
-        4: (True, False), 5: (True, False),
+        1: (False, False),
+        2: (False, False),
+        3: (False, False),
+        4: (True, False),
+        5: (True, False),
         6: (True, True),
     }
 
 
 def test_parse_labels_warns_about_frames_in_two_ranges(tmp_path):
     path = tmp_path / "labels.txt"
-    path.write_text("1\t5\tYN\n5\t8\tYY\n")     # frame 5 is in both, as 41642 is in the real file
+    path.write_text("1\t5\tYN\n5\t8\tYY\n")  # frame 5 is in both, as 41642 is in the real file
     with pytest.warns(UserWarning, match="more than one range"):
         labels = f2.parse_labels(path)
-    assert labels[5] == (True, True)            # the later range wins
+    assert labels[5] == (True, True)  # the later range wins
 
 
 def test_frame_paths_follow_the_dataset_naming(tmp_path):
@@ -94,19 +98,19 @@ def test_inferno_position_recovers_where_a_colour_sits_on_the_palette():
     frame = np.stack([inferno_bgr(p) for p in positions])[None].astype(np.uint8)
     recovered, distance = f2.inferno_position(frame)
     assert np.allclose(recovered[0], positions, atol=0.03)
-    assert distance.max() < 6       # colours rounded for the lookup table, so not exactly zero
+    assert distance.max() < 6  # colours rounded for the lookup table, so not exactly zero
 
 
 def test_rainbow_position_runs_from_dark_red_to_orange():
     colours = [
-        RAINBOW_COLD,           # cold background
-        rainbow_bgr(330),       # pink
-        rainbow_bgr(300),       # magenta
-        rainbow_bgr(240),       # blue
-        rainbow_bgr(180),       # cyan
-        rainbow_bgr(120),       # green
-        rainbow_bgr(60),        # yellow
-        rainbow_bgr(25),        # orange (hottest)
+        RAINBOW_COLD,  # cold background
+        rainbow_bgr(330),  # pink
+        rainbow_bgr(300),  # magenta
+        rainbow_bgr(240),  # blue
+        rainbow_bgr(180),  # cyan
+        rainbow_bgr(120),  # green
+        rainbow_bgr(60),  # yellow
+        rainbow_bgr(25),  # orange (hottest)
     ]
     frame = np.stack(colours)[None].astype(np.uint8)
     position = f2.rainbow_position(frame)[0]
@@ -128,7 +132,7 @@ def test_detect_palette_rainbow():
 
 
 def test_detect_palette_unknown_for_other_colours():
-    frame = np.full((SIZE, SIZE, 3), (40, 200, 40), dtype=np.uint8)   # plain green
+    frame = np.full((SIZE, SIZE, 3), (40, 200, 40), dtype=np.uint8)  # plain green
     assert f2.detect_palette(frame) == f2.UNKNOWN
 
 
@@ -137,7 +141,7 @@ def rainbow_frame_with_dark_red_share(share: float) -> np.ndarray:
     the rest magenta, with a hot square in the bottom corner."""
     frame = np.zeros((SIZE, SIZE, 3), dtype=np.uint8)
     frame[:] = rainbow_bgr(320, value=200).astype(np.uint8)
-    frame[:int(share * SIZE)] = RAINBOW_COLD.astype(np.uint8)
+    frame[: int(share * SIZE)] = RAINBOW_COLD.astype(np.uint8)
     frame[50:60, 50:60] = rainbow_bgr(25).astype(np.uint8)
     return frame
 
@@ -182,13 +186,13 @@ def test_frame_median_gate_empties_frames_without_a_cold_majority():
     # so the frame's median heat is about 0.45.
     frame = frame_with_square(inferno_bgr(0.45), inferno_bgr(0.95), top_left=(20, 30))
     frame[:, :20] = inferno_bgr(0.05).astype(np.uint8)
-    assert f2.hot_mask(frame, f2.INFERNO).any()                              # gate off by default
-    assert f2.hot_mask(frame, f2.INFERNO, max_frame_median=0.7).any()        # median ~0.45: passes
-    assert not f2.hot_mask(frame, f2.INFERNO, max_frame_median=0.25).any()   # median ~0.45: gated
+    assert f2.hot_mask(frame, f2.INFERNO).any()  # gate off by default
+    assert f2.hot_mask(frame, f2.INFERNO, max_frame_median=0.7).any()  # median ~0.45: passes
+    assert not f2.hot_mask(frame, f2.INFERNO, max_frame_median=0.25).any()  # median ~0.45: gated
 
 
 def test_hot_mask_drops_specks():
-    frame = frame_with_square(inferno_bgr(0.05), inferno_bgr(0.95), side=3)   # 9 px, below min_area_px
+    frame = frame_with_square(inferno_bgr(0.05), inferno_bgr(0.95), side=3)  # 9 px, below min_area_px
     assert not f2.hot_mask(frame, f2.INFERNO).any()
 
 
@@ -216,8 +220,8 @@ def test_yolo_seg_line_for_a_square():
     parts = lines[0].split()
     assert parts[0] == "0"
     coords = np.array(parts[1:], dtype=float).reshape(-1, 2)
-    assert len(coords) == 4                          # simplified down to the corners
-    assert ((coords >= 0) & (coords <= 1)).all()     # normalised to the image size
+    assert len(coords) == 4  # simplified down to the corners
+    assert ((coords >= 0) & (coords <= 1)).all()  # normalised to the image size
     # Corners at pixels 20 and 35 of a 64-pixel image.
     assert np.allclose(sorted(set(np.round(coords[:, 0] * SIZE))), [20, 35])
     assert np.allclose(sorted(set(np.round(coords[:, 1] * SIZE))), [20, 35])

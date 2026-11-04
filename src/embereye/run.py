@@ -52,7 +52,7 @@ async def main_async(args: argparse.Namespace) -> None:
         n = 0
         async for frame in adapter.stream_frames():
             n += 1
-            if n % 30 == 0:                # a status line every ~1s of footage
+            if n % 30 == 0:  # a status line every ~1s of footage
                 pos = frame.telemetry.position
                 pos_str = f"{pos.lat:.5f}, {pos.lon:.5f}" if pos else "no GPS"
                 print(
@@ -65,10 +65,14 @@ async def main_async(args: argparse.Namespace) -> None:
 def main() -> None:
     parser = argparse.ArgumentParser(description="EmberEye runner")
     parser.add_argument("--adapter", required=True, choices=["recorded", "sim"], help="Which drone adapter to use")
-    parser.add_argument("--input",   type=Path, help="Path to recording directory (recorded adapter)")
-    parser.add_argument("--fps",     type=float, default=None, help="Playback fps (recorded adapter); default = as fast as possible")
-    parser.add_argument("--loop",    action="store_true", help="Loop the recording forever")
-    parser.add_argument("--duration", type=float, default=600.0, help="Length of the simulated flight in seconds (sim adapter)")
+    parser.add_argument("--input", type=Path, help="Path to recording directory (recorded adapter)")
+    parser.add_argument(
+        "--fps", type=float, default=None, help="Playback fps (recorded adapter); default = as fast as possible"
+    )
+    parser.add_argument("--loop", action="store_true", help="Loop the recording forever")
+    parser.add_argument(
+        "--duration", type=float, default=600.0, help="Length of the simulated flight in seconds (sim adapter)"
+    )
     args = parser.parse_args()
 
     try:

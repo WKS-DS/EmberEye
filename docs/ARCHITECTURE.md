@@ -83,14 +83,15 @@ for result in results:
 ```python
 import numpy as np
 
+
 def georef_pixel(camera, pose, x, y, terrain, grid, step_m=5.0, max_range_m=3000.0):
     """(east, north, up) of the ground point seen by pixel (x, y), or None.
 
     camera:  sim.camera.CameraModel       pose: sim.camera.CameraPose
     terrain: prediction.terrain.Terrain   grid: geo.GroundGrid (same shape as terrain)
     """
-    ray = camera.pixel_rays(pose, x, y)      # unit vector in (east, north, up)
-    start = pose.position                     # local metres; up = MSL altitude - LocalFrame.origin_alt_m
+    ray = camera.pixel_rays(pose, x, y)  # unit vector in (east, north, up)
+    start = pose.position  # local metres; up = MSL altitude - LocalFrame.origin_alt_m
 
     def height_above_ground(distance):
         east, north, up = start + distance * ray
@@ -111,7 +112,7 @@ def georef_pixel(camera, pose, x, y, terrain, grid, step_m=5.0, max_range_m=3000
                     far = middle
             return start + far * ray
         near = far
-    return None     # never reaches the ground within max_range_m (e.g. a pixel showing sky)
+    return None  # never reaches the ground within max_range_m (e.g. a pixel showing sky)
 ```
 
 Notes:
@@ -136,6 +137,7 @@ Notes:
 
 ```python
 import numpy as np
+
 
 class TemporalFilter:
     """Confirm fire cell by cell on the ground grid. Input comes from GeoRef."""
@@ -178,6 +180,7 @@ The `in_view` and `burning` grids for a frame come from georeferencing that fram
 import numpy as np
 from embereye.geo import GroundGrid
 
+
 def points_to_grid(grid: GroundGrid, east_north: np.ndarray) -> np.ndarray:
     """(N, 2) ground points (east, north) -> (rows, cols) True/False grid of the cells they fall in."""
     rows, cols, on_grid = grid.cells_at(east_north[:, 0], east_north[:, 1])
@@ -185,11 +188,12 @@ def points_to_grid(grid: GroundGrid, east_north: np.ndarray) -> np.ndarray:
     marked[rows[on_grid], cols[on_grid]] = True
     return marked
 
+
 class FireMapper:
     def __init__(self, grid: GroundGrid):
         self.grid = grid
-        self.first_confirmed_min = np.full(grid.shape, np.nan)   # minutes; NaN = never confirmed burning
-        self.covered = np.zeros(grid.shape, dtype=bool)           # in view at least once
+        self.first_confirmed_min = np.full(grid.shape, np.nan)  # minutes; NaN = never confirmed burning
+        self.covered = np.zeros(grid.shape, dtype=bool)  # in view at least once
 
     def update(self, in_view, confirmed, time_min):
         """in_view: this frame's coverage grid; confirmed: TemporalFilter output."""
@@ -224,6 +228,7 @@ How the Mapper is scored against the simulator is defined under **Scoring** in S
 from twilio.rest import Client
 import time
 
+
 class Alerter:
     def __init__(self, account_sid, auth_token, from_number, to_numbers, cooldown_sec=300):
         self.client = Client(account_sid, auth_token)
@@ -231,19 +236,19 @@ class Alerter:
         self.to_numbers = to_numbers
         self.cooldown = cooldown_sec
         self.last_alert = {}
-    
+
     def send_alert(self, fire_id, lat, lon, confidence):
         now = time.time()
         if fire_id in self.last_alert and (now - self.last_alert[fire_id]) < self.cooldown:
             return False  # rate limited
-        
+
         for to_number in self.to_numbers:
             self.client.messages.create(
                 body=f"🔥 Fire detected at {lat:.5f}, {lon:.5f} (conf: {confidence:.0%})",
                 from_=self.from_number,
-                to=to_number
+                to=to_number,
             )
-        
+
         self.last_alert[fire_id] = now
         return True
 ```
@@ -270,6 +275,7 @@ import rasterio
 from rasterio.warp import Resampling, calculate_default_transform, reproject
 from embereye.prediction.terrain import Terrain
 
+
 def load_dem(path, utm_epsg, cell_size_m=10.0):
     """Read a DEM, reproject it onto a UTM grid in metres, and wrap it as a Terrain."""
     dst_crs = f"EPSG:{utm_epsg}"
@@ -279,9 +285,12 @@ def load_dem(path, utm_epsg, cell_size_m=10.0):
         )
         elevation = np.empty((height, width), dtype=np.float32)
         reproject(
-            source=rasterio.band(src, 1), destination=elevation,
-            src_transform=src.transform, src_crs=src.crs,
-            dst_transform=transform, dst_crs=dst_crs,
+            source=rasterio.band(src, 1),
+            destination=elevation,
+            src_transform=src.transform,
+            src_crs=src.crs,
+            dst_transform=transform,
+            dst_crs=dst_crs,
             resampling=Resampling.bilinear,
         )
     return Terrain(elevation, cell_size_m), transform
@@ -316,11 +325,24 @@ from embereye.prediction.spread import Weather
 HEADERS = {"User-Agent": "EmberEye capstone (TODO(Will): contact email)"}
 
 COMPASS_TO_DEG = {
-    'N': 0, 'NNE': 22.5, 'NE': 45, 'ENE': 67.5,
-    'E': 90, 'ESE': 112.5, 'SE': 135, 'SSE': 157.5,
-    'S': 180, 'SSW': 202.5, 'SW': 225, 'WSW': 247.5,
-    'W': 270, 'WNW': 292.5, 'NW': 315, 'NNW': 337.5,
+    "N": 0,
+    "NNE": 22.5,
+    "NE": 45,
+    "ENE": 67.5,
+    "E": 90,
+    "ESE": 112.5,
+    "SE": 135,
+    "SSE": 157.5,
+    "S": 180,
+    "SSW": 202.5,
+    "SW": 225,
+    "WSW": 247.5,
+    "W": 270,
+    "WNW": 292.5,
+    "NW": 315,
+    "NNW": 337.5,
 }
+
 
 def get_weather(lat, lon, wind_adjustment_factor=0.4) -> Weather:
     point = requests.get(f"https://api.weather.gov/points/{lat},{lon}", headers=HEADERS, timeout=10).json()
@@ -374,6 +396,7 @@ import numpy as np
 from embereye.prediction.spread import FUEL_MODELS, NON_BURNABLE
 
 LANDFIRE_NON_BURNABLE = [91, 92, 93, 98, 99]
+
 
 def to_model_codes(landfire_codes: np.ndarray) -> np.ndarray:
     """LANDFIRE FBFM13 codes -> the codes SpreadPredictor accepts."""
