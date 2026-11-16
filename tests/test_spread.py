@@ -1,12 +1,12 @@
-"""Tests for the arrival-time fire spread model (embereye/prediction/spread.py)."""
+"""Tests for the arrival-time fire spread model (scorchline/prediction/spread.py)."""
 
 import math
 
 import numpy as np
 import pytest
 
-from embereye.prediction.spread import FUEL_MODELS, NON_BURNABLE, SpreadPredictor, Weather
-from embereye.prediction.terrain import Terrain
+from scorchline.prediction.spread import FUEL_MODELS, NON_BURNABLE, SpreadPredictor, Weather
+from scorchline.prediction.terrain import Terrain
 
 CALM = Weather(wind_speed_mph=0.0, wind_to_deg=0.0)
 GRASS = 1

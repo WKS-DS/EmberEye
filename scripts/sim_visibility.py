@@ -20,7 +20,7 @@ import time
 
 import numpy as np
 
-from embereye.sim.fire_sim import BURNING, PATHS, SCENARIOS, FireSim, make_path, visible_burning_fraction
+from scorchline.sim.fire_sim import BURNING, PATHS, SCENARIOS, FireSim, make_path, visible_burning_fraction
 
 
 def main() -> None:

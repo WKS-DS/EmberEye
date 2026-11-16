@@ -1,8 +1,8 @@
-"""Tests for the shared mask helpers (embereye/masks.py)."""
+"""Tests for the shared mask helpers (scorchline/masks.py)."""
 
 import numpy as np
 
-from embereye.masks import iou, mask_to_polygons, polygons_to_mask
+from scorchline.masks import iou, mask_to_polygons, polygons_to_mask
 
 
 def test_polygons_to_mask_fills_a_square():

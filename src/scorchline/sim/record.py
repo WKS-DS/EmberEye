@@ -2,8 +2,8 @@
 record.py — Run the fire simulator and save what it produced to disk.
 
 Usage:
-    python -m embereye.sim.record --out data/sim/demo
-    python -m embereye.sim.record --scenario hard --path lawnmower    # writes to data/sim/hard-lawnmower
+    python -m scorchline.sim.record --out data/sim/demo
+    python -m scorchline.sim.record --scenario hard --path lawnmower    # writes to data/sim/hard-lawnmower
 
 What gets written into the output folder:
 
@@ -30,7 +30,7 @@ from pathlib import Path
 import cv2
 import numpy as np
 
-from embereye.sim.fire_sim import (
+from scorchline.sim.fire_sim import (
     BURNING,
     PATHS,
     SCENARIOS,
@@ -197,7 +197,7 @@ def save_run(
 
 
 def main() -> None:
-    parser = argparse.ArgumentParser(description="Run the EmberEye fire simulator and save the frames")
+    parser = argparse.ArgumentParser(description="Run the Scorchline fire simulator and save the frames")
     parser.add_argument("--scenario", choices=list(SCENARIOS), default="demo", help="Which simulated world")
     parser.add_argument("--path", choices=PATHS, default="orbit", help="Which flight path")
     parser.add_argument(

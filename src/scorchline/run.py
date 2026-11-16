@@ -6,8 +6,8 @@ pipeline, and prints what it sees. As the pipeline grows, this file wires
 in each new stage.
 
 Usage:
-    python -m embereye.run --adapter recorded --input data/recordings/demo_flight/
-    python -m embereye.run --adapter sim --duration 120
+    python -m scorchline.run --adapter recorded --input data/recordings/demo_flight/
+    python -m scorchline.run --adapter sim --duration 120
 """
 
 from __future__ import annotations
@@ -16,9 +16,9 @@ import argparse
 import asyncio
 from pathlib import Path
 
-from embereye.adapters.base import DroneAdapter
-from embereye.adapters.recorded import RecordedFootageAdapter
-from embereye.adapters.sim import SimAdapter
+from scorchline.adapters.base import DroneAdapter
+from scorchline.adapters.recorded import RecordedFootageAdapter
+from scorchline.adapters.sim import SimAdapter
 
 
 def build_adapter(name: str, args: argparse.Namespace) -> DroneAdapter:
@@ -46,7 +46,7 @@ def build_adapter(name: str, args: argparse.Namespace) -> DroneAdapter:
 async def main_async(args: argparse.Namespace) -> None:
     """Consume frames from the adapter. This is where the pipeline will plug in."""
     adapter = build_adapter(args.adapter, args)
-    print(f"Starting EmberEye with adapter: {adapter.name}")
+    print(f"Starting Scorchline with adapter: {adapter.name}")
 
     async with adapter:
         n = 0
@@ -63,7 +63,7 @@ async def main_async(args: argparse.Namespace) -> None:
 
 
 def main() -> None:
-    parser = argparse.ArgumentParser(description="EmberEye runner")
+    parser = argparse.ArgumentParser(description="Scorchline runner")
     parser.add_argument("--adapter", required=True, choices=["recorded", "sim"], help="Which drone adapter to use")
     parser.add_argument("--input", type=Path, help="Path to recording directory (recorded adapter)")
     parser.add_argument(

@@ -57,8 +57,8 @@ from pathlib import Path
 import cv2
 import numpy as np
 
-from embereye.data import flame2 as f2
-from embereye.masks import iou, polygons_to_mask
+from scorchline.data import flame2 as f2
+from scorchline.masks import iou, polygons_to_mask
 
 HANDCHECK = f2.FLAME2_DIR / "handcheck"
 PASS_IOU = 0.5

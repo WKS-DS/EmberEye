@@ -1,4 +1,4 @@
-"""Tests for the FLAME 2 labelling code (embereye/data/flame2.py).
+"""Tests for the FLAME 2 labelling code (scorchline/data/flame2.py).
 
 Everything here uses small synthetic images made in the test, so the
 tests run without the real dataset in data/.
@@ -9,7 +9,7 @@ import matplotlib
 import numpy as np
 import pytest
 
-from embereye.data import flame2 as f2
+from scorchline.data import flame2 as f2
 
 SIZE = 64
 

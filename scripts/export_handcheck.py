@@ -38,7 +38,7 @@ from pathlib import Path
 import cv2
 import numpy as np
 
-from embereye.data import flame2 as f2
+from scorchline.data import flame2 as f2
 
 OUT = f2.FLAME2_DIR / "handcheck"
 CANDIDATE_EVERY = 10

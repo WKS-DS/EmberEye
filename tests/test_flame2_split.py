@@ -1,8 +1,8 @@
-"""Tests for the FLAME 2 block split (embereye/data/flame2_split.py). No dataset needed."""
+"""Tests for the FLAME 2 block split (scorchline/data/flame2_split.py). No dataset needed."""
 
 import pytest
 
-from embereye.data.flame2_split import VAL_TEST_BLOCKS, assign_splits, check_split, split_ranges
+from scorchline.data.flame2_split import VAL_TEST_BLOCKS, assign_splits, check_split, split_ranges
 
 BLOCKS = [(11, 20, "val"), (41, 50, "test")]
 

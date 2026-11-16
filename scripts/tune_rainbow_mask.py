@@ -40,8 +40,8 @@ import numpy as np
 sys.path.insert(0, str(Path(__file__).parent))  # to reuse the labelme reader
 from score_handcheck import hand_mask  # noqa: E402
 
-from embereye.data import flame2 as f2  # noqa: E402
-from embereye.masks import iou  # noqa: E402
+from scorchline.data import flame2 as f2  # noqa: E402
+from scorchline.masks import iou  # noqa: E402
 
 HANDCHECK = f2.FLAME2_DIR / "handcheck"
 GATE = 0.25

@@ -1,11 +1,11 @@
-"""Tests for the shared domain types (embereye/models/types.py)."""
+"""Tests for the shared domain types (scorchline/models/types.py)."""
 
 from datetime import datetime, timezone
 
 import numpy as np
 import pytest
 
-from embereye.models.types import Detection, DetectionClass, PixelBBox, SensorType, Telemetry
+from scorchline.models.types import Detection, DetectionClass, PixelBBox, SensorType, Telemetry
 
 
 def test_bbox_from_polygon_contains_every_point():

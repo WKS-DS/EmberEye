@@ -1,9 +1,9 @@
-"""Tests for the shared ground coordinates (embereye/geo.py)."""
+"""Tests for the shared ground coordinates (scorchline/geo.py)."""
 
 import numpy as np
 import pytest
 
-from embereye.geo import GroundGrid, LocalFrame, utm_epsg_for
+from scorchline.geo import GroundGrid, LocalFrame, utm_epsg_for
 
 SPOKANE = (47.6588, -117.4260)
 SEATTLE = (47.6062, -122.3321)

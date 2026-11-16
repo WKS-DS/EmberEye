@@ -1,4 +1,4 @@
-# EmberEye Development Workflow
+# Scorchline Development Workflow
 
 **Purpose:** a simple workflow for one developer working with Claude Code. `main` always works, nothing sensitive reaches the public repo, and every change is small enough to review.
 **Last updated:** 2026-10-24
@@ -34,7 +34,7 @@
 
 - **Secrets** live in `.env`, which is gitignored. `.env.example` lists their names with placeholders, and code reads them from the environment.
 - **Datasets** stay in `data/`, which is gitignored. `data/README.md` says where each one comes from and its licence. Never commit them.
-- **Partner data** (anything shared by agencies or companies) lives outside the repo, e.g. in `~/EmberEye-private/`. It never touches git.
+- **Partner data** (anything shared by agencies or companies) lives outside the repo, e.g. in `~/Scorchline-private/`. It never touches git.
 - **Model weights** are not in git. Attach them to GitHub Releases.
 - **Notebooks** have their outputs stripped automatically. Finished logic moves into `src/`, with tests.
 
