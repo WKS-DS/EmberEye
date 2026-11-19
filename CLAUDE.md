@@ -12,12 +12,13 @@ Vigil detects wildfires from UAV footage by fusing RGB and thermal imagery. The 
 ## Current status
 _Last updated: 2026-11-18_
 
-- **Open PR:** #9 `feat/fire-mapper` (M2 PR 3: Fire Mapper). Repo `WKS-DS/Vigil`, renamed from EmberEye; the local folder is still `EmberEye`. Commits use the WKS-DS noreply email (repo-local git config) and `gh` runs as WKS-DS.
-- **Done:** M1 (sim, incl. Phase 5b); review fixes Phases 0–4.4: hand-check (every stratum ≥ 0.53, mean 0.63: `docs/findings/flame2-label-validation.md`), export fix, block split + YOLO-seg export in `data/flame2/yolo_seg.nosync/` (train 38,715 / val 5,200 / test 5,302); workflow step B (PR #3: pre-commit, CI); ruff format (#4); rename to Vigil (#7); M2 PRs 1–2, GeoRef on flat ground and terrain (#5, #8). 110 tests pass.
-- **Waiting on Will:** review and merge PR #9; rename the local folder when convenient (steps in PR #7: recreate the venv, fix the 3 dataset YAML paths, move Claude Code's memory folder); the GitHub settings checklist (`docs/WORKFLOW.md` §5).
+- **Open PR:** #10 `feat/m2-scoring` (M2 PR 4: scoring script; finishes M2). Repo `WKS-DS/Vigil`, renamed from EmberEye; the local folder is still `EmberEye`. Commits use the WKS-DS noreply email (repo-local git config) and `gh` runs as WKS-DS.
+- **Done:** M1 (sim, incl. Phase 5b); review fixes Phases 0–4.4: hand-check (every stratum ≥ 0.53, mean 0.63: `docs/findings/flame2-label-validation.md`), export fix, block split + YOLO-seg export in `data/flame2/yolo_seg.nosync/` (train 38,715 / val 5,200 / test 5,302); workflow step B (PR #3: pre-commit, CI); ruff format (#4); rename to Vigil (#7); M2: GeoRef on flat ground and terrain (#5, #8), Fire Mapper (#9), scoring (#10; results in `docs/ARCHITECTURE.md`, Scoring). 113 tests pass.
+- **Waiting on Will:** review and merge PR #10; where to train YOLO (blocks M4); rename the local folder when convenient (steps in PR #7: recreate the venv, fix the 3 dataset YAML paths, move Claude Code's memory folder); the GitHub settings checklist (`docs/WORKFLOW.md` §5).
 - **Next for Claude Code:**
-  1. M2 PR 4, the scoring script: IoU over seen cells, coverage, mean/p95 georef error, on the demo and hard scenarios. Also report IoU against only what the flight could see (cells inside a fire outline while in view): on the hard lawnmower, "ever burned" vs all burned cells is 0.42 because 689 cells caught fire after the drone passed and 180 had burned out before it arrived, while the mapper matches what it saw exactly. Deferred until YOLO is plugged in: temporal filter, alerter, event log, GeoJSON, p90 latency.
-  2. M4: train YOLO11-seg, RGB baseline first (`rgb/rgb_baseline.yaml`). Fire-frame metrics are the headline: no-fire val/test frames have near-copies in train, on top of the scene confound.
+  1. M4: train YOLO11-seg, RGB baseline first (`rgb/rgb_baseline.yaml`); adds ultralytics + torch. Fire-frame metrics are the headline: no-fire val/test frames have near-copies in train, on top of the scene confound. Then plug it in with the deferred Stage 1 parts: temporal filter, alerter, event log, GeoJSON, p90 latency.
+  2. M3 (sim only, can run alongside M4): the arrival-time predictor run with wrong wind and fuel against sim truth.
+  3. Optional: telemetry noise (GPS, heading, gimbal) in the sim, so the GeoRef error in `scripts/score_m2.py` means something.
 - **Open decisions:** Pi 5 vs Jetson Orin Nano (TODO(Will) in `docs/PARTS_LIST.md` and `docs/ARCHITECTURE.md`); license; whether to move the repo out of iCloud; forest no-fire negatives from another dataset (TODO(Will) in `docs/ARCHITECTURE.md`); where to train YOLO (the Mac or a cloud GPU).
 
 ## Architecture
@@ -57,7 +58,8 @@ Vigil/
 │   │   ├── camera.py   # CameraModel, CameraPose, OrbitPath, LawnmowerPath
 │   │   ├── world.py    # MuJoCo scene: ground tiles + camera
 │   │   ├── fire_sim.py # FireSim, SimObservation, demo/hard scenarios, make_path
-│   │   └── record.py   # Save a simulated flight to disk
+│   │   ├── record.py   # Save a simulated flight to disk
+│   │   └── scoring.py  # M2 scores vs the sim's answer key (map IoU, coverage, GeoRef error)
 │   ├── data/
 │   │   ├── flame2.py   # FLAME 2 labels, palette detection, hot masks, YOLO-seg lines
 │   │   └── flame2_split.py  # Train/val/test blocks, gaps, split checks
@@ -84,7 +86,8 @@ Vigil/
 │   ├── score_handcheck.py      # IoU of hot_mask vs hand masks, per stratum
 │   ├── tune_rainbow_mask.py    # Held-out tuning of hot_mask on rainbow frames
 │   ├── export_flame2_yolo.py   # Block split + YOLO-seg labels for training
-│   └── sim_visibility.py       # Per sim frame: share of burning cells in view
+│   ├── sim_visibility.py       # Per sim frame: share of burning cells in view
+│   └── score_m2.py             # M2 scores on demo/hard x orbit/lawnmower flights (prints only)
 ├── tests/              # One test_<module>.py per module (pytest); none need the dataset
 ├── docs/
 │   ├── ARCHITECTURE.md
@@ -114,7 +117,7 @@ Detector (milestone M4), a parallel track to the sim:
 3. ⬜ Train YOLO11-seg: RGB baseline (YN + no-fire), YY ablation, thermal only
 4. ⬜ Integrate the detector into the pipeline
 
-Simulation (the sim tests everything except the detector): ✅ M1 sim adapter → ⬜ M2 GeoRef + Fire Mapper → ⬜ M3 arrival-time predictor tested with wrong wind/fuel.
+Simulation (the sim tests everything except the detector): ✅ M1 sim adapter → ✅ M2 GeoRef + Fire Mapper (`scripts/score_m2.py`) → ⬜ M3 arrival-time predictor tested with wrong wind/fuel.
 
 How the sim works: `FireSim.run()` yields a `SimObservation` per frame with the RGB image, a fire mask read from MuJoCo's segmentation render (no ML), fire outlines as pixel polygons (same layout as YOLO `masks.xy`), the exact camera pose, and the true state of every ground cell.
 
@@ -153,6 +156,9 @@ python -m vigil.sim.record --scenario hard --path lawnmower
 
 # Per frame: share of burning cells in view, and render time (prints only)
 python scripts/sim_visibility.py --scenario hard --path orbit
+
+# Score GeoRef + Fire Mapper on the demo and hard flights (~1 min; prints a table)
+python scripts/score_m2.py
 
 # Audit the FLAME 2 labelling method (reads the dataset, writes data/flame2/audit/)
 python scripts/audit_flame2_labels.py
