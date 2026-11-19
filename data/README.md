@@ -15,8 +15,8 @@ Everything in `data/` is gitignored except this file. Datasets are referenced, n
 - `data/flame2/audit/`: `scripts/audit_flame2_labels.py`
 - `data/flame2/handcheck/`: `scripts/export_handcheck.py`, plus the hand labels (keep these: they can't be regenerated)
 - `data/flame2/yolo_seg.nosync/`: `scripts/export_flame2_yolo.py`
-- `data/sim/`: `python -m embereye.sim.record`
+- `data/sim/`: `python -m vigil.sim.record`
 
 ## Never here
 
-Partner data (anything shared by agencies or companies) lives outside the repo, e.g. `~/EmberEye-private/`. Model weights go to GitHub Releases, not git. See `docs/WORKFLOW.md`.
+Partner data (anything shared by agencies or companies) lives outside the repo, e.g. `~/Vigil-private/`. Model weights go to GitHub Releases, not git. See `docs/WORKFLOW.md`.

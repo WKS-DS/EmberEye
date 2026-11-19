@@ -1,5 +1,5 @@
 # Large data files (FLAME 2 dataset, recordings, model weights). The leading / means
-# only the top-level data/ folder, not the src/embereye/data/ package. Its README
+# only the top-level data/ folder, not the src/vigil/data/ package. Its README
 # (sources and licences) is the one file in it that is committed.
 /data/*
 !/data/README.md

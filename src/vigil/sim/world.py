@@ -20,9 +20,9 @@ from __future__ import annotations
 import mujoco
 import numpy as np
 
-from embereye.geo import GroundGrid
-from embereye.prediction.terrain import Terrain
-from embereye.sim.camera import CameraModel, look_rotation
+from vigil.geo import GroundGrid
+from vigil.prediction.terrain import Terrain
+from vigil.sim.camera import CameraModel, look_rotation
 
 CAMERA_NAME = "drone_cam"
 
@@ -57,7 +57,7 @@ def build_world_xml(grid: GroundGrid, terrain: Terrain, camera: CameraModel) -> 
     outskirts = " ".join(str(v) for v in OUTSKIRTS_RGB)
 
     return f"""
-<mujoco model="embereye_fire_world">
+<mujoco model="vigil_fire_world">
   <!-- Nothing collides or moves; this scene is only ever looked at. -->
   <option><flag contact="disable"/></option>
   <default><geom contype="0" conaffinity="0"/></default>

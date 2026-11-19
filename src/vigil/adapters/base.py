@@ -15,7 +15,7 @@ from __future__ import annotations
 from abc import ABC, abstractmethod
 from typing import AsyncIterator
 
-from embereye.models.types import Frame
+from vigil.models.types import Frame
 
 
 class DroneAdapter(ABC):

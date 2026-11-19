@@ -1,18 +1,18 @@
-# EmberEye
+# Vigil
 
 Drone-based wildfire detection system using multi-sensor fusion (RGB + thermal).
 
 ## Project Overview
 
-EmberEye detects wildfires from UAV footage by fusing RGB and thermal imagery. The system is designed to be drone-agnostic — any platform that can provide frames flows through the same pipeline.
+Vigil detects wildfires from UAV footage by fusing RGB and thermal imagery. The system is designed to be drone-agnostic — any platform that can provide frames flows through the same pipeline.
 
 **Owner:** Will Scott (wkscott715@gmail.com)  
-**GitHub:** https://github.com/WKS-DS/EmberEye
+**GitHub:** https://github.com/WKS-DS/Vigil
 
 ## Current status
 _Last updated: 2026-11-03_
 
-- **Open PRs:** #4 `style/ruff-format` (ruff format + format check in pre-commit and CI); #5 `feat/georef-flat` (M2 PR 1: GeoRef on flat ground, `pipeline/georef.py`). Repo `WKS-DS/EmberEye`; commits use the WKS-DS noreply email (repo-local git config) and `gh` runs as WKS-DS.
+- **Open PRs:** #4 `style/ruff-format` (ruff format + format check in pre-commit and CI); #5 `feat/georef-flat` (M2 PR 1: GeoRef on flat ground, `pipeline/georef.py`). Repo `WKS-DS/Vigil`; commits use the WKS-DS noreply email (repo-local git config) and `gh` runs as WKS-DS.
 - **Done:** M1 (sim, incl. Phase 5b); review fixes Phases 0–4.4: hand-check (every stratum ≥ 0.53, mean 0.63: `docs/findings/flame2-label-validation.md`), export fix, block split + YOLO-seg export in `data/flame2/yolo_seg.nosync/` (train 38,715 / val 5,200 / test 5,302); workflow step B (PR #3: pre-commit, CI). 99 tests pass.
 - **Waiting on Will:** review and merge PR #4, then #5; the GitHub settings checklist (`docs/WORKFLOW.md` §5).
 - **Next for Claude Code:**
@@ -42,8 +42,8 @@ The full three-stage design (detection, spread prediction, suppression support) 
 ## Key Directories
 
 ```
-EmberEye/
-├── src/embereye/
+Vigil/
+├── src/vigil/
 │   ├── adapters/       # Drone platform adapters
 │   │   ├── base.py     # DroneAdapter ABC
 │   │   ├── recorded.py # Playback from files
@@ -119,7 +119,7 @@ How the sim works: `FireSim.run()` yields a `SimObservation` per frame with the 
 
 ### Annotation Strategy
 
-FLAME 2 has frame-level labels (Fire/NoFire), not masks, so masks are generated from the thermal frames. A fixed grayscale threshold does **not** work: the thermal frames are false-colour JPEGs, the palette switches from an inferno-style one to a rainbow one at about frame 17,000 (whose background is mostly dark red in some frames, magenta in others), and the colours appear to be rescaled every frame. The labelling logic lives in `src/embereye/data/flame2.py` (palette detection, per-palette hot-region masks, YOLO-seg export), so notebooks call it instead of re-implementing it; the train/val/test blocks are in `flame2_split.py`. See `docs/ARCHITECTURE.md` (Detector → Training data strategy, Labelling decisions).
+FLAME 2 has frame-level labels (Fire/NoFire), not masks, so masks are generated from the thermal frames. A fixed grayscale threshold does **not** work: the thermal frames are false-colour JPEGs, the palette switches from an inferno-style one to a rainbow one at about frame 17,000 (whose background is mostly dark red in some frames, magenta in others), and the colours appear to be rescaled every frame. The labelling logic lives in `src/vigil/data/flame2.py` (palette detection, per-palette hot-region masks, YOLO-seg export), so notebooks call it instead of re-implementing it; the train/val/test blocks are in `flame2_split.py`. See `docs/ARCHITECTURE.md` (Detector → Training data strategy, Labelling decisions).
 
 ## Git Workflow
 
@@ -139,16 +139,16 @@ pre-commit install          # checks on every commit (ruff, gitleaks, nbstripout
 source venv.nosync/bin/activate
 
 # Run with recorded footage
-python -m embereye.run --adapter recorded --input data/recordings/demo/
+python -m vigil.run --adapter recorded --input data/recordings/demo/
 
 # Run the fire simulator through the adapter interface
-python -m embereye.run --adapter sim --duration 120
+python -m vigil.run --adapter sim --duration 120
 
 # Save a simulated flight (frames, masks, poses, preview.mp4) to data/sim/demo/
-python -m embereye.sim.record --out data/sim/demo
+python -m vigil.sim.record --out data/sim/demo
 
 # The harder test: big grid, two fires, a hill (writes to data/sim/hard-lawnmower/)
-python -m embereye.sim.record --scenario hard --path lawnmower
+python -m vigil.sim.record --scenario hard --path lawnmower
 
 # Per frame: share of burning cells in view, and render time (prints only)
 python scripts/sim_visibility.py --scenario hard --path orbit
@@ -166,7 +166,7 @@ python scripts/export_flame2_yolo.py
 pytest
 ```
 
-The environment folder is called `venv.nosync` (not `.venv`) on purpose: the Desktop syncs to iCloud, which marks files in dot-folders as hidden, and Python then ignores the file that makes `import embereye` work. The `.nosync` ending also keeps iCloud from uploading the environment.
+The environment folder is called `venv.nosync` (not `.venv`) on purpose: the Desktop syncs to iCloud, which marks files in dot-folders as hidden, and Python then ignores the file that makes `import vigil` work. The `.nosync` ending also keeps iCloud from uploading the environment.
 
 ## Data Files (not in git)
 

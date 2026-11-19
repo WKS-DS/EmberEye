@@ -29,9 +29,9 @@ import math
 
 import numpy as np
 
-from embereye.geo import LocalFrame
-from embereye.models.types import Frame
-from embereye.sim.camera import CameraModel, CameraPose, look_rotation
+from vigil.geo import LocalFrame
+from vigil.models.types import Frame
+from vigil.sim.camera import CameraModel, CameraPose, look_rotation
 
 
 def camera_from_frame(frame: Frame) -> CameraModel:

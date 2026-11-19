@@ -34,9 +34,9 @@ from typing import Optional
 import cv2
 import numpy as np
 
-from embereye.masks import mask_to_polygons
+from vigil.masks import mask_to_polygons
 
-# src/embereye/data/flame2.py -> parents[3] is the project folder.
+# src/vigil/data/flame2.py -> parents[3] is the project folder.
 FLAME2_DIR = Path(__file__).resolve().parents[3] / "data" / "flame2"
 IMAGE_SIZE = 254  # every FLAME 2 frame is 254 x 254 pixels
 

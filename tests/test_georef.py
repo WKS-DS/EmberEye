@@ -1,4 +1,4 @@
-"""Tests for GeoRef on flat ground (embereye/pipeline/georef.py).
+"""Tests for GeoRef on flat ground (vigil/pipeline/georef.py).
 
 GeoRef only sees what a drone reports, so these tests build Frames the way
 an adapter would. The last test checks the result against the ground cells
@@ -11,10 +11,10 @@ from datetime import datetime, timezone
 import numpy as np
 import pytest
 
-from embereye.geo import LocalFrame
-from embereye.models.types import Frame, GeoPoint, SensorType, Telemetry
-from embereye.pipeline.georef import GeoRef, camera_from_frame
-from embereye.sim.camera import CameraModel, OrbitPath, look_rotation
+from vigil.geo import LocalFrame
+from vigil.models.types import Frame, GeoPoint, SensorType, Telemetry
+from vigil.pipeline.georef import GeoRef, camera_from_frame
+from vigil.sim.camera import CameraModel, OrbitPath, look_rotation
 
 LOCAL = LocalFrame(origin_lat=47.6588, origin_lon=-117.4260, origin_alt_m=600.0)
 CAMERA = CameraModel(width=320, height=240, fov_v_deg=50.0)
@@ -107,8 +107,8 @@ def test_matches_the_cells_the_simulator_drew():
     """Georeference every pixel of a few sim frames from their telemetry
     alone, and compare with the ground cell MuJoCo rendered there."""
     pytest.importorskip("mujoco")
-    from embereye.adapters.sim import SimAdapter
-    from embereye.sim.fire_sim import demo_scenario
+    from vigil.adapters.sim import SimAdapter
+    from vigil.sim.fire_sim import demo_scenario
 
     scenario = demo_scenario("flat", rows=24, cols=24)
     path = OrbitPath(radius_m=150.0, period_s=120.0, altitude_min_m=60.0, altitude_max_m=110.0, altitude_period_s=70.0)

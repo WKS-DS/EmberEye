@@ -1,6 +1,6 @@
-# EmberEye Prototype — Parts List and Justification
+# Vigil Prototype — Parts List and Justification
 
-**Project:** EmberEye: Aerial Thermal Situational Awareness for Wildland Fire Response
+**Project:** Vigil: Aerial Thermal Situational Awareness for Wildland Fire Response
 **Author:** William [Last Name]
 **Date:** [insert]
 **Estimated total:** $950 (base) / $1,220 (recommended)
@@ -9,7 +9,7 @@
 
 ## Design principle
 
-The EmberEye software stack is designed to be **drone-agnostic** — it accepts
+The Vigil software stack is designed to be **drone-agnostic** — it accepts
 thermal + RGB + telemetry from any compatible source through an adapter
 interface. This parts list funds a **low-cost custom prototype** for
 development and validation only. The resulting software could be deployed

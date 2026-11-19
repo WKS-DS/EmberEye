@@ -39,7 +39,7 @@ from typing import Iterable, Optional, Sequence
 
 import numpy as np
 
-from embereye.prediction.terrain import Terrain
+from vigil.prediction.terrain import Terrain
 
 # ---------------------------------------------------------------------------
 # Fuel
