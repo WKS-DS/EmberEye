@@ -1,4 +1,4 @@
-"""Tests for the recorded-footage adapter (embereye/adapters/recorded.py).
+"""Tests for the recorded-footage adapter (vigil/adapters/recorded.py).
 
 Each test builds a tiny fake recording — a short video plus telemetry —
 in a temporary folder. `tmp_path` is a pytest "fixture": naming it as a
@@ -15,7 +15,7 @@ import cv2
 import numpy as np
 import pytest
 
-from embereye.adapters.recorded import RecordedFootageAdapter
+from vigil.adapters.recorded import RecordedFootageAdapter
 
 FPS = 30
 

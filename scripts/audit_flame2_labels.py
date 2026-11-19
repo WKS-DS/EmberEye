@@ -32,7 +32,7 @@ from pathlib import Path
 import cv2
 import numpy as np
 
-from embereye.data import flame2 as f2
+from vigil.data import flame2 as f2
 
 SAMPLE_EVERY = 50
 GATE = 0.25  # max_frame_median value tried as the optional frame-level gate

@@ -1,4 +1,4 @@
-"""Tests for the fire simulator (embereye/sim/ and the sim adapter).
+"""Tests for the fire simulator (vigil/sim/ and the sim adapter).
 
 The most important ones check that the simulator's "answer key" is
 trustworthy: the camera pose it reports really is the pose the picture was
@@ -15,13 +15,13 @@ import pytest
 # machine where it is not installed.
 pytest.importorskip("mujoco")
 
-from embereye.adapters.sim import SimAdapter
-from embereye.geo import GroundGrid, LocalFrame
-from embereye.models.types import SensorType
-from embereye.prediction.spread import Weather
-from embereye.prediction.terrain import Terrain
-from embereye.sim.camera import CameraModel, LawnmowerPath, OrbitPath, look_rotation
-from embereye.sim.fire_sim import (
+from vigil.adapters.sim import SimAdapter
+from vigil.geo import GroundGrid, LocalFrame
+from vigil.models.types import SensorType
+from vigil.prediction.spread import Weather
+from vigil.prediction.terrain import Terrain
+from vigil.sim.camera import CameraModel, LawnmowerPath, OrbitPath, look_rotation
+from vigil.sim.fire_sim import (
     BURNED,
     BURNING,
     UNBURNED,
@@ -33,7 +33,7 @@ from embereye.sim.fire_sim import (
     mask_to_polygons,
     visible_burning_fraction,
 )
-from embereye.sim.record import draw_preview
+from vigil.sim.record import draw_preview
 
 ROWS = COLS = 24
 CELL_M = 10.0

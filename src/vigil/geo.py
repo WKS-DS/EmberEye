@@ -1,7 +1,7 @@
 """
 geo.py — Shared ground coordinates.
 
-Two small tools that every geometry-aware part of EmberEye agrees on:
+Two small tools that every geometry-aware part of Vigil agrees on:
 
 - LocalFrame: converts between GPS (lat/lon) and "local metres" — how far
   east and north a point is from a chosen origin. All the geometry is done
