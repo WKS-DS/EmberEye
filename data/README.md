@@ -15,6 +15,7 @@ Everything in `data/` is gitignored except this file. Datasets are referenced, n
 - `data/flame2/audit/`: `scripts/audit_flame2_labels.py`
 - `data/flame2/handcheck/`: `scripts/export_handcheck.py`, plus the hand labels (keep these: they can't be regenerated)
 - `data/flame2/yolo_seg.nosync/`: `scripts/export_flame2_yolo.py`
+- `data/flame2/colab/`: `scripts/pack_yolo_for_colab.py` (one training set as a zip for Google Colab). Upload it only to your own Google Drive and don't share it: FLAME 2 can't be redistributed.
 - `data/sim/`: `python -m vigil.sim.record`
 
 ## Never here
