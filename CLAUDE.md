@@ -12,11 +12,11 @@ Vigil detects wildfires from UAV footage by fusing RGB and thermal imagery. The 
 ## Current status
 _Last updated: 2026-11-18_
 
-- **Open PR:** #8 `feat/georef-terrain` (M2 PR 2: GeoRef on terrain). Repo `WKS-DS/Vigil`, renamed from EmberEye; the local folder is still `EmberEye`. Commits use the WKS-DS noreply email (repo-local git config) and `gh` runs as WKS-DS.
-- **Done:** M1 (sim, incl. Phase 5b); review fixes Phases 0–4.4: hand-check (every stratum ≥ 0.53, mean 0.63: `docs/findings/flame2-label-validation.md`), export fix, block split + YOLO-seg export in `data/flame2/yolo_seg.nosync/` (train 38,715 / val 5,200 / test 5,302); workflow step B (PR #3: pre-commit, CI); ruff format (#4); M2 PR 1, GeoRef on flat ground (#5); rename to Vigil (#7). 106 tests pass.
-- **Waiting on Will:** review and merge PR #8; rename the local folder when convenient (steps in PR #7: recreate the venv, fix the 3 dataset YAML paths, move Claude Code's memory folder); the GitHub settings checklist (`docs/WORKFLOW.md` §5).
+- **Open PR:** #9 `feat/fire-mapper` (M2 PR 3: Fire Mapper). Repo `WKS-DS/Vigil`, renamed from EmberEye; the local folder is still `EmberEye`. Commits use the WKS-DS noreply email (repo-local git config) and `gh` runs as WKS-DS.
+- **Done:** M1 (sim, incl. Phase 5b); review fixes Phases 0–4.4: hand-check (every stratum ≥ 0.53, mean 0.63: `docs/findings/flame2-label-validation.md`), export fix, block split + YOLO-seg export in `data/flame2/yolo_seg.nosync/` (train 38,715 / val 5,200 / test 5,302); workflow step B (PR #3: pre-commit, CI); ruff format (#4); rename to Vigil (#7); M2 PRs 1–2, GeoRef on flat ground and terrain (#5, #8). 110 tests pass.
+- **Waiting on Will:** review and merge PR #9; rename the local folder when convenient (steps in PR #7: recreate the venv, fix the 3 dataset YAML paths, move Claude Code's memory folder); the GitHub settings checklist (`docs/WORKFLOW.md` §5).
 - **Next for Claude Code:**
-  1. The rest of M2, one PR each: (3) Fire Mapper: burned + seen maps (far cells smaller than a pixel count as unseen); (4) scoring script: IoU over seen cells, coverage, mean/p95 georef error, on the demo and hard scenarios. Deferred until YOLO is plugged in: temporal filter, alerter, event log, GeoJSON, p90 latency.
+  1. M2 PR 4, the scoring script: IoU over seen cells, coverage, mean/p95 georef error, on the demo and hard scenarios. Also report IoU against only what the flight could see (cells inside a fire outline while in view): on the hard lawnmower, "ever burned" vs all burned cells is 0.42 because 689 cells caught fire after the drone passed and 180 had burned out before it arrived, while the mapper matches what it saw exactly. Deferred until YOLO is plugged in: temporal filter, alerter, event log, GeoJSON, p90 latency.
   2. M4: train YOLO11-seg, RGB baseline first (`rgb/rgb_baseline.yaml`). Fire-frame metrics are the headline: no-fire val/test frames have near-copies in train, on top of the scene confound.
 - **Open decisions:** Pi 5 vs Jetson Orin Nano (TODO(Will) in `docs/PARTS_LIST.md` and `docs/ARCHITECTURE.md`); license; whether to move the repo out of iCloud; forest no-fire negatives from another dataset (TODO(Will) in `docs/ARCHITECTURE.md`); where to train YOLO (the Mac or a cloud GPU).
 
@@ -64,7 +64,8 @@ Vigil/
 │   ├── geo.py          # LocalFrame (GPS <-> metres), GroundGrid
 │   ├── masks.py        # mask <-> outline polygons, IoU (shared by sim and labelling)
 │   ├── pipeline/       # Detection pipeline (WIP)
-│   │   └── georef.py   # GeoRef: pixel -> ground point (flat ground or terrain)
+│   │   ├── georef.py   # GeoRef: pixel -> ground point (flat ground or terrain)
+│   │   └── fire_mapper.py  # Per-frame in-view/burning grids; FireMapper: seen + ever-burned maps
 │   └── run.py          # Entry point
 ├── notebooks/
 │   ├── 01_flame_exploration.ipynb
