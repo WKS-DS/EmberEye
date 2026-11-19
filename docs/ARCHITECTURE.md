@@ -455,7 +455,18 @@ Stage 3 does not attempt autonomous fire suppression. Instead, it uses Stage 2's
 - **Truth.** The sim's truth grid (`SimObservation.truth_state`) has three states: UNBURNED, BURNING and BURNED (burned out).
 - **Fire Mapper, primary score: "ever burned".** Fire polygons are outer outlines (OpenCV `RETR_EXTERNAL`), so burned-out centres get filled in, and the Mapper builds up its map over time. Its main output is therefore "ever seen burning", scored by IoU against `truth_state != UNBURNED` at the same timestamp.
 - **Coverage.** Score IoU only over cells that have been in view at least once (the Mapper's coverage grid), and report coverage separately, so a cell nobody looked at doesn't count as a miss.
+- **"What the flight saw" (second truth).** "Ever burned" against all burned cells also counts cells nobody could have seen burning: cells that burned out before the drone first looked, or caught fire after its last look (on the hard lawnmower, 689 cells caught fire after the drone passed). So also score IoU against the cells that were inside a fire outline while in view, judged with the Mapper's rules from `SimObservation.cell_ids`. That scores the mapping itself; the gap between the two scores is the flight plan's.
 - **Active front (optional, secondary).** IoU against `truth_state == BURNING`. This needs its own Mapper output, e.g. cells seen burning in the last K minutes.
+- **Built:** `scripts/score_m2.py` (scores in `sim/scoring.py`). With the sim's filled fire outlines standing in for the detector, 900 s flights, a frame every 15 s, 640 x 480:
+
+  | Scenario | Path | Coverage | IoU all burned | IoU what the flight saw | GeoRef error mean / p95 |
+  |---|---|---|---|---|---|
+  | demo | orbit | 100% | 1.000 | 1.000 | 0.000 / 0.000 m |
+  | demo | lawnmower | 100% | 0.828 | 1.000 | 0.000 / 0.000 m |
+  | hard | orbit | 100% | 0.972 | 0.999 | 0.001 / 0.000 m |
+  | hard | lawnmower | 95% | 0.420 | 0.999 | 0.000 / 0.000 m |
+
+  GeoRef error is close to 0 because the sim's telemetry is exact and GeoRef uses the same terrain the sim draws; it becomes informative once telemetry noise (GPS, heading, gimbal) is added.
 - **GeoRef error.** For sampled pixels, the distance in metres between the georeferenced point and the true ground point. The truth comes from `SimObservation.cell_ids` (which cell the pixel shows) located exactly by the same ray/terrain intersection. Report the mean and the 95th percentile.
 
 ---
@@ -503,7 +514,7 @@ Stage 3 does not attempt autonomous fire suppression. Instead, it uses Stage 2's
 ## Suggested Build Order
 
 1. ✅ **Sim adapter** — Spread Predictor fire on ground grid, scripted MuJoCo camera, exact pose (done: `src/vigil/sim/`, `adapters/sim.py`)
-2. 🔄 **GeoRef + Fire Mapper** — Score against sim ground truth (GeoRef done, flat ground and terrain: `pipeline/georef.py`; Fire Mapper done: `pipeline/fire_mapper.py`; scoring script next)
+2. ✅ **GeoRef + Fire Mapper** — Score against sim ground truth (done: `pipeline/georef.py`, `pipeline/fire_mapper.py`, scored by `scripts/score_m2.py`; temporal filter, alerter, event log, GeoJSON and latency wait for YOLO)
 3. **Arrival-time predictor** — Test with wrong wind/fuel vs ground truth
 4. **FLAME 2 detector** — Parallel track; independent of sim
 
