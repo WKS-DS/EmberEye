@@ -136,44 +136,13 @@ The `in_view` and `burning` grids for a frame come from georeferencing that fram
 
 **Purpose:** Accumulate confirmed fire into a ground map of everywhere fire has been seen. Bridges Stage 1 (per-frame masks) to Stage 2 (the fire area the predictor starts from).
 
+**Built** (`pipeline/fire_mapper.py`). `frame_to_grids` places every pixel of a frame on the ground with GeoRef and gives the frame's `in_view` and `burning` grids: a cell is in view if at least 4 pixels show it (so far-away cells of about a pixel count as unseen), and burning if at least 4 of them show fire (so a stray fire pixel at a fire's edge doesn't set the neighbouring cell on fire). `FireMapper.update` adds a frame's grids to `first_fire_min` (NaN = never) and `covered`; until the temporal filter exists, each frame's `burning` grid goes straight in. On sim flights, with the sim's fire outlines filled in standing in for the detector, each frame's grids match the cells the simulator says each pixel shows (IoU 0.997 or better for both grids).
+
 **How to build:**
 - Use `geo.GroundGrid` for the map. Row 0 is the **north** edge and rows count southward, like an image or a DEM, so a cell's north coordinate goes *down* as the row number goes up. A grid where north increases with the row index would flip the map.
 - Store the first-confirmed time in a float grid filled with **NaN** for "never". Don't use 0 to mean "unburned" in a time grid: a detection at t = 0 would vanish.
 - Keep a separate True/False **coverage** grid of cells that have been in view at least once. Scoring needs it.
-- Getting a frame's fire polygons onto the grid:
-  - **Flat ground:** georeference the polygon's vertices and rasterize the resulting ground polygon. A plane maps straight lines to straight lines, so this is exact.
-  - **Terrain:** that shortcut breaks, because a straight edge in the image lands on a curve over a hill. Fill each polygon into an image-space mask instead, then georeference the mask's pixels (subsampled, e.g. every 2nd pixel) or a densely sampled outline.
-- The same per-pixel georeferencing, run on a coarse sample of the whole frame, gives the frame's `in_view` grid.
-
-```python
-import numpy as np
-from vigil.geo import GroundGrid
-
-
-def points_to_grid(grid: GroundGrid, east_north: np.ndarray) -> np.ndarray:
-    """(N, 2) ground points (east, north) -> (rows, cols) True/False grid of the cells they fall in."""
-    rows, cols, on_grid = grid.cells_at(east_north[:, 0], east_north[:, 1])
-    marked = np.zeros(grid.shape, dtype=bool)
-    marked[rows[on_grid], cols[on_grid]] = True
-    return marked
-
-
-class FireMapper:
-    def __init__(self, grid: GroundGrid):
-        self.grid = grid
-        self.first_confirmed_min = np.full(grid.shape, np.nan)  # minutes; NaN = never confirmed burning
-        self.covered = np.zeros(grid.shape, dtype=bool)  # in view at least once
-
-    def update(self, in_view, confirmed, time_min):
-        """in_view: this frame's coverage grid; confirmed: TemporalFilter output."""
-        self.covered |= in_view
-        new = confirmed & np.isnan(self.first_confirmed_min)
-        self.first_confirmed_min[new] = time_min
-
-    def ever_burned(self) -> np.ndarray:
-        """True for every cell confirmed burning at least once. Stage 2 starts from this."""
-        return ~np.isnan(self.first_confirmed_min)
-```
+- Getting a frame's fire onto the grid: fill the detector's fire outlines into an image mask (`masks.polygons_to_mask`) and georeference every pixel. Georeferencing only the outline's corners and filling the ground polygon would be exact on flat ground only: over a hill a straight edge in the image lands on a curve. Every pixel is affordable because GeoRef handles a whole 320 x 240 frame in 6–33 ms.
 
 How the Mapper is scored against the simulator is defined under **Scoring** in System-Level Validation.
 
@@ -534,7 +503,7 @@ Stage 3 does not attempt autonomous fire suppression. Instead, it uses Stage 2's
 ## Suggested Build Order
 
 1. ✅ **Sim adapter** — Spread Predictor fire on ground grid, scripted MuJoCo camera, exact pose (done: `src/vigil/sim/`, `adapters/sim.py`)
-2. 🔄 **GeoRef + Fire Mapper** — Score against sim ground truth (GeoRef done, flat ground and terrain: `pipeline/georef.py`)
+2. 🔄 **GeoRef + Fire Mapper** — Score against sim ground truth (GeoRef done, flat ground and terrain: `pipeline/georef.py`; Fire Mapper done: `pipeline/fire_mapper.py`; scoring script next)
 3. **Arrival-time predictor** — Test with wrong wind/fuel vs ground truth
 4. **FLAME 2 detector** — Parallel track; independent of sim
 

@@ -44,7 +44,7 @@ Vigil/
 │   │   ├── detector.py             # YOLO11-seg fire masks (planned)
 │   │   ├── georef.py               # Pixel → ground point: camera ray + terrain
 │   │   ├── temporal_filter.py      # Confirm fire per ground cell (planned)
-│   │   ├── fire_mapper.py          # Ground map of confirmed fire (planned)
+│   │   ├── fire_mapper.py          # Ground map of where fire has been seen
 │   │   └── alerter.py              # One alert per fire region (planned)
 │   ├── prediction/                 # Stage 2
 │   │   ├── terrain.py              # Elevation → slope and aspect
