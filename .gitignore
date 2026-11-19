@@ -4,6 +4,10 @@
 /data/*
 !/data/README.md
 
+# Model weights, wherever they land (Ultralytics downloads pretrained ones
+# into the current folder). Trained weights go to GitHub Releases.
+*.pt
+
 # Secrets: .env holds them; .env.example (committed) lists their names.
 .env
 .env.*

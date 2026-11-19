@@ -12,14 +12,14 @@ Vigil detects wildfires from UAV footage by fusing RGB and thermal imagery. The 
 ## Current status
 _Last updated: 2026-11-18_
 
-- **Open PR:** #10 `feat/m2-scoring` (M2 PR 4: scoring script; finishes M2). Repo `WKS-DS/Vigil`, renamed from EmberEye; the local folder is still `EmberEye`. Commits use the WKS-DS noreply email (repo-local git config) and `gh` runs as WKS-DS.
+- **Open PR:** #11 `feat/colab-training` (M4 PR 1: train the RGB baseline on Colab). Repo `WKS-DS/Vigil`, renamed from EmberEye; the local folder is still `EmberEye`. Commits use the WKS-DS noreply email (repo-local git config) and `gh` runs as WKS-DS.
 - **Done:** M1 (sim, incl. Phase 5b); review fixes Phases 0–4.4: hand-check (every stratum ≥ 0.53, mean 0.63: `docs/findings/flame2-label-validation.md`), export fix, block split + YOLO-seg export in `data/flame2/yolo_seg.nosync/` (train 38,715 / val 5,200 / test 5,302); workflow step B (PR #3: pre-commit, CI); ruff format (#4); rename to Vigil (#7); M2: GeoRef on flat ground and terrain (#5, #8), Fire Mapper (#9), scoring (#10; results in `docs/ARCHITECTURE.md`, Scoring). 113 tests pass.
-- **Waiting on Will:** review and merge PR #10; where to train YOLO (blocks M4); rename the local folder when convenient (steps in PR #7: recreate the venv, fix the 3 dataset YAML paths, move Claude Code's memory folder); the GitHub settings checklist (`docs/WORKFLOW.md` §5).
+- **Waiting on Will:** merge PR #11; upload `data/flame2/colab/flame2_rgb_train_yn.zip` (1.79 GB, already built) to `MyDrive/vigil/` and run `notebooks/03_train_colab.ipynb` on Colab; rename the local folder when convenient (steps in PR #7: recreate the venv, fix the 3 dataset YAML paths, move Claude Code's memory folder); the GitHub settings checklist (`docs/WORKFLOW.md` §5).
 - **Next for Claude Code:**
-  1. M4: train YOLO11-seg, RGB baseline first (`rgb/rgb_baseline.yaml`); adds ultralytics + torch. Fire-frame metrics are the headline: no-fire val/test frames have near-copies in train, on top of the scene confound. Then plug it in with the deferred Stage 1 parts: temporal filter, alerter, event log, GeoJSON, p90 latency.
-  2. M3 (sim only, can run alongside M4): the arrival-time predictor run with wrong wind and fuel against sim truth.
-  3. Optional: telemetry noise (GPS, heading, gimbal) in the sim, so the GeoRef error in `scripts/score_m2.py` means something.
-- **Open decisions:** Pi 5 vs Jetson Orin Nano (TODO(Will) in `docs/PARTS_LIST.md` and `docs/ARCHITECTURE.md`); license; whether to move the repo out of iCloud; forest no-fire negatives from another dataset (TODO(Will) in `docs/ARCHITECTURE.md`); where to train YOLO (the Mac or a cloud GPU).
+  1. M3 PR 1 (sim only, runs while YOLO trains): how wrong wind, wind speed, fuel moisture and fuel map can be before 1/3/6 h forecasts fail. Use `hard_scenario(rows=330, cols=330, cell_size_m=30)` (the fire reaches the edge at 7.5 h; the 10 m sim grids at 73-106 min); seed from the true fire at 1 h; score IoU of new growth and the growth-area ratio.
+  2. M4 PR 2, once a run finishes: fire-frame evaluation (val YN and YY fire frames separately, false alarms on no-fire frames). RGB/thermal alignment is still open (`docs/findings/flame2-label-validation.md`), so RGB mask scores may be capped by label offsets. Then the YY ablation and thermal-only runs, and plugging the detector in with the deferred Stage 1 parts: temporal filter, alerter, event log, GeoJSON, p90 latency.
+  3. Later: M3 PR 2 (seed the forecast from the Fire Mapper's map), M3 PR 3 (Next Day Wildfire Spread; needs Will's Kaggle account). Optional: telemetry noise in the sim, so the GeoRef error in `scripts/score_m2.py` means something.
+- **Open decisions:** Pi 5 vs Jetson Orin Nano (TODO(Will) in `docs/PARTS_LIST.md` and `docs/ARCHITECTURE.md`); license; whether to move the repo out of iCloud; forest no-fire negatives from another dataset (TODO(Will) in `docs/ARCHITECTURE.md`). Training runs on Colab Pro (decided 2026-11-18).
 
 ## Architecture
 
@@ -71,7 +71,8 @@ Vigil/
 │   └── run.py          # Entry point
 ├── notebooks/
 │   ├── 01_flame_exploration.ipynb
-│   └── 02_generate_annotations.ipynb
+│   ├── 02_generate_annotations.ipynb
+│   └── 03_train_colab.ipynb  # Colab: unzip the dataset from Drive, run scripts/train_yolo.py
 ├── data/               # Not in git, except README.md (dataset sources and licences)
 │   ├── flame2/         # FLAME 2 dataset (not in git)
 │   │   ├── frames/     # 53,451 RGB + thermal pairs
@@ -87,7 +88,9 @@ Vigil/
 │   ├── tune_rainbow_mask.py    # Held-out tuning of hot_mask on rainbow frames
 │   ├── export_flame2_yolo.py   # Block split + YOLO-seg labels for training
 │   ├── sim_visibility.py       # Per sim frame: share of burning cells in view
-│   └── score_m2.py             # M2 scores on demo/hard x orbit/lawnmower flights (prints only)
+│   ├── score_m2.py             # M2 scores on demo/hard x orbit/lawnmower flights (prints only)
+│   ├── pack_yolo_for_colab.py  # One training set as a zip for Google Drive (test split left out)
+│   └── train_yolo.py           # YOLO11-seg training (Colab or any GPU); weights each epoch, --resume
 ├── tests/              # One test_<module>.py per module (pytest); none need the dataset
 ├── docs/
 │   ├── ARCHITECTURE.md
@@ -97,6 +100,7 @@ Vigil/
 ├── .github/workflows/ci.yml  # ruff + pytest on every PR
 ├── .pre-commit-config.yaml   # ruff, gitleaks, nbstripout, 5 MB file limit
 ├── .env.example        # Names of the secrets .env holds (.env is not in git)
+├── requirements-train.txt  # ultralytics, pinned, for training on Colab (CI doesn't install it)
 ├── CLAUDE.local.md     # Will's personal instructions for Claude Code (not in git)
 └── venv.nosync/        # Python environment (not in git)
 ```
@@ -169,6 +173,9 @@ python scripts/score_handcheck.py
 # Block split + YOLO-seg labels for training (~10 min; rebuilds data/flame2/yolo_seg.nosync/)
 python scripts/export_flame2_yolo.py
 
+# Zip the RGB baseline training set for Colab (~10 s; writes data/flame2/colab/flame2_rgb_train_yn.zip)
+python scripts/pack_yolo_for_colab.py
+
 # Run tests
 pytest
 ```
@@ -185,7 +192,7 @@ Large files live in `data/` which is gitignored:
 
 ## Dependencies
 
-`requirements.txt` is the dependency list. Core: numpy, opencv-python, pytest, mujoco (fire simulator), pyproj (GPS <-> metres). Notebooks: pandas, matplotlib, Pillow. Coming soon: ultralytics (YOLO11), torch, fastapi + uvicorn (dashboard).
+`requirements.txt` is the dependency list. Core: numpy, opencv-python, pytest, mujoco (fire simulator), pyproj (GPS <-> metres). Notebooks: pandas, matplotlib, Pillow. `requirements-train.txt` adds ultralytics (pinned) for training on Colab; CI doesn't install it. Coming soon: fastapi + uvicorn (dashboard).
 
 ## Notes for Claude Code
 
