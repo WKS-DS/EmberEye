@@ -1,7 +1,7 @@
 """
 sim.py — Adapter for the fire simulator.
 
-Presents the simulated drone (see embereye/sim/) through the same
+Presents the simulated drone (see vigil/sim/) through the same
 DroneAdapter interface as a real one, so the pipeline cannot tell the
 difference: it just receives Frames with an image and telemetry.
 
@@ -20,10 +20,10 @@ from __future__ import annotations
 import asyncio
 from typing import AsyncIterator, Optional
 
-from embereye.adapters.base import DroneAdapter
-from embereye.models.types import Frame, GeoPoint, SensorType, Telemetry
-from embereye.sim.camera import CameraModel, CameraPath, OrbitPath
-from embereye.sim.fire_sim import FireSim, Scenario, SimObservation, demo_scenario
+from vigil.adapters.base import DroneAdapter
+from vigil.models.types import Frame, GeoPoint, SensorType, Telemetry
+from vigil.sim.camera import CameraModel, CameraPath, OrbitPath
+from vigil.sim.fire_sim import FireSim, Scenario, SimObservation, demo_scenario
 
 
 class SimAdapter(DroneAdapter):

@@ -26,12 +26,12 @@ from typing import Iterator, Optional
 
 import numpy as np
 
-from embereye.geo import GroundGrid, LocalFrame
-from embereye.masks import mask_to_polygons  # also importable from here, as before
-from embereye.prediction.spread import FUEL_MODELS, NON_BURNABLE, SpreadPredictor, Weather
-from embereye.prediction.terrain import Terrain
-from embereye.sim.camera import CameraModel, CameraPath, CameraPose, LawnmowerPath, OrbitPath
-from embereye.sim.world import FireWorld
+from vigil.geo import GroundGrid, LocalFrame
+from vigil.masks import mask_to_polygons  # also importable from here, as before
+from vigil.prediction.spread import FUEL_MODELS, NON_BURNABLE, SpreadPredictor, Weather
+from vigil.prediction.terrain import Terrain
+from vigil.sim.camera import CameraModel, CameraPath, CameraPose, LawnmowerPath, OrbitPath
+from vigil.sim.world import FireWorld
 
 # Values used in the truth grid (SimObservation.truth_state).
 UNBURNED = 0

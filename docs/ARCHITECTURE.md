@@ -1,8 +1,8 @@
-# EmberEye System Architecture
+# Vigil System Architecture
 
 ## Overview
 
-EmberEye is a drone-based wildfire detection and prediction system with three stages:
+Vigil is a drone-based wildfire detection and prediction system with three stages:
 
 - **Stage 1: Detection** — Real-time fire identification and alerting
 - **Stage 2: Prediction** — Fire spread forecasting for proactive crew positioning
@@ -41,10 +41,10 @@ for result in results:
 ```
 
 **Training data strategy:**
-- Generate masks from the thermal frames with the palette-aware method in `src/embereye/data/flame2.py`. FLAME 2's thermal frames are false-colour JPEGs, not temperatures: the colour palette changes partway through the dataset and appears to be rescaled frame by frame, so no fixed pixel threshold finds fire across the whole set.
+- Generate masks from the thermal frames with the palette-aware method in `src/vigil/data/flame2.py`. FLAME 2's thermal frames are false-colour JPEGs, not temperatures: the colour palette changes partway through the dataset and appears to be rescaled frame by frame, so no fixed pixel threshold finds fire across the whole set.
 - Train the model on RGB frames using the thermal-derived masks, **after** checking that RGB and thermal pixels line up. That is unverified: on frame 13701, thermal outlines drawn on the RGB frame matched nothing visible. Many fire frames are also mostly smoke in RGB, so some fire the thermal camera sees is invisible in RGB.
 - Hand-label a separate test set (~300 frames) to avoid circular evaluation
-- Split FLAME 2 into contiguous blocks of frames, not at random, so near-identical neighbouring frames never land in different splits. All no-fire frames are frames 1–13700 (before the burn), so validation and test each need a block from that range. The blocks are in `src/embereye/data/flame2_split.py`: about 72% train, 10% val and 10% test, with val and test each holding every stratum, and 300 unused frames between blocks of different splits. `scripts/export_flame2_yolo.py` writes the split and the YOLO-seg labels.
+- Split FLAME 2 into contiguous blocks of frames, not at random, so near-identical neighbouring frames never land in different splits. All no-fire frames are frames 1–13700 (before the burn), so validation and test each need a block from that range. The blocks are in `src/vigil/data/flame2_split.py`: about 72% train, 10% val and 10% test, with val and test each holding every stratum, and 300 unused frames between blocks of different splits. `scripts/export_flame2_yolo.py` writes the split and the YOLO-seg labels.
 
 **Labelling decisions (Phase 4, 2026-10-19):**
 - `labels.txt` is the frame-level truth. No-fire frames always get empty label files, whatever the mask says. Fire frames get `hot_mask` with the frame gate on (`max_frame_median=0.25`). A fire frame whose mask comes out empty, gated or not, is excluded from training and listed in the split report, never written as an empty label.
@@ -180,7 +180,7 @@ The `in_view` and `burning` grids for a frame come from georeferencing that fram
 
 ```python
 import numpy as np
-from embereye.geo import GroundGrid
+from vigil.geo import GroundGrid
 
 
 def points_to_grid(grid: GroundGrid, east_north: np.ndarray) -> np.ndarray:
@@ -275,7 +275,7 @@ class Alerter:
 import numpy as np
 import rasterio
 from rasterio.warp import Resampling, calculate_default_transform, reproject
-from embereye.prediction.terrain import Terrain
+from vigil.prediction.terrain import Terrain
 
 
 def load_dem(path, utm_epsg, cell_size_m=10.0):
@@ -322,9 +322,9 @@ TODO: handle nodata cells, and crop/align the result to the project's `GroundGri
 ```python
 import re
 import requests
-from embereye.prediction.spread import Weather
+from vigil.prediction.spread import Weather
 
-HEADERS = {"User-Agent": "EmberEye capstone (TODO(Will): contact email)"}
+HEADERS = {"User-Agent": "Vigil capstone (TODO(Will): contact email)"}
 
 COMPASS_TO_DEG = {
     "N": 0,
@@ -395,7 +395,7 @@ The spread rates live in `FUEL_MODELS` in `prediction/spread.py`: each fuel's ba
 
 ```python
 import numpy as np
-from embereye.prediction.spread import FUEL_MODELS, NON_BURNABLE
+from vigil.prediction.spread import FUEL_MODELS, NON_BURNABLE
 
 LANDFIRE_NON_BURNABLE = [91, 92, 93, 98, 99]
 
@@ -494,7 +494,7 @@ Stage 3 does not attempt autonomous fire suppression. Instead, it uses Stage 2's
 
 ### System-Level Validation (Stages 1-2)
 
-**Platform:** MuJoCo simulation with scripted camera path (no SITL initially). Built: `src/embereye/sim/`.
+**Platform:** MuJoCo simulation with scripted camera path (no SITL initially). Built: `src/vigil/sim/`.
 
 **Sim setup:**
 - Run Spread Predictor as ground truth fire
@@ -512,7 +512,7 @@ Stage 3 does not attempt autonomous fire suppression. Instead, it uses Stage 2's
 | Alert latency | Time from first visible fire to alert |
 | Prediction accuracy | Run predictor with **wrong** wind/fuel; compare to truth |
 
-**Why scripted camera:** "Flight path execution accuracy" measures autopilot, not EmberEye. Save SITL for later integration.
+**Why scripted camera:** "Flight path execution accuracy" measures autopilot, not Vigil. Save SITL for later integration.
 
 #### Scoring
 
@@ -566,7 +566,7 @@ Stage 3 does not attempt autonomous fire suppression. Instead, it uses Stage 2's
 
 ## Suggested Build Order
 
-1. ✅ **Sim adapter** — Spread Predictor fire on ground grid, scripted MuJoCo camera, exact pose (done: `src/embereye/sim/`, `adapters/sim.py`)
+1. ✅ **Sim adapter** — Spread Predictor fire on ground grid, scripted MuJoCo camera, exact pose (done: `src/vigil/sim/`, `adapters/sim.py`)
 2. 🔄 **GeoRef + Fire Mapper** — Score against sim ground truth (GeoRef on flat ground done: `pipeline/georef.py`)
 3. **Arrival-time predictor** — Test with wrong wind/fuel vs ground truth
 4. **FLAME 2 detector** — Parallel track; independent of sim

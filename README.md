@@ -1,4 +1,4 @@
-# EmberEye
+# Vigil
 
 Aerial thermal situational awareness for wildland fire response.
 
@@ -13,14 +13,14 @@ to an incident commander through a live web dashboard.
 
 ## Core design principle
 
-EmberEye's software stack does not care what drone it is talking to.
+Vigil's software stack does not care what drone it is talking to.
 Every drone-specific concern lives inside a **drone adapter**, one class
 that knows how to pull frames and telemetry from a specific platform and
-convert them to EmberEye's internal format. Everything else in the
+convert them to Vigil's internal format. Everything else in the
 pipeline treats a DJI Mavic 3 Thermal, an Autel EVO Dual, a custom PX4
 build, or a recorded video file identically.
 
-This means departments can plug EmberEye into whatever drone they already
+This means departments can plug Vigil into whatever drone they already
 own. It also means we can develop the entire ML and dashboard stack against
 recorded footage, without needing a drone in the air every day.
 
@@ -29,11 +29,11 @@ recorded footage, without needing a drone in the air every day.
 ## Repository layout
 
 ```
-EmberEye/
+Vigil/
 ├── docs/
 │   ├── ARCHITECTURE.md             # Three-stage system design
 │   └── PARTS_LIST.md               # Hardware budget for prototype
-├── src/embereye/
+├── src/vigil/
 │   ├── adapters/                   # Drone-platform-specific input layers
 │   │   ├── base.py                 # Adapter interface — all others inherit this
 │   │   ├── recorded.py             # Read pre-recorded flights (dev + reproducibility)
@@ -73,16 +73,16 @@ pip install -e .
 
 # Run against a pre-recorded flight (no hardware needed): a folder holding
 # rgb.mp4 and telemetry.json, plus thermal.mp4 if there is one
-python -m embereye.run --adapter recorded --input data/recordings/demo_flight/
+python -m vigil.run --adapter recorded --input data/recordings/demo_flight/
 
 # Later (planned): run against the physical prototype
-python -m embereye.run --adapter rpi_custom
+python -m vigil.run --adapter rpi_custom
 
 # Run against the built-in fire simulator (no hardware or footage needed)
-python -m embereye.run --adapter sim --duration 120
+python -m vigil.run --adapter sim --duration 120
 
 # Save a simulated flight with a preview video
-python -m embereye.sim.record --out data/sim/demo
+python -m vigil.sim.record --out data/sim/demo
 ```
 
 ---

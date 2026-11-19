@@ -33,8 +33,8 @@ from typing import AsyncIterator, Optional
 import cv2
 import numpy as np
 
-from embereye.adapters.base import DroneAdapter
-from embereye.models.types import Frame, GeoPoint, SensorType, Telemetry
+from vigil.adapters.base import DroneAdapter
+from vigil.models.types import Frame, GeoPoint, SensorType, Telemetry
 
 
 class RecordedFootageAdapter(DroneAdapter):

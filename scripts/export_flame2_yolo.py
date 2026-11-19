@@ -53,8 +53,8 @@ import numpy as np
 sys.path.insert(0, str(Path(__file__).parent))  # to reuse the hand-check helpers
 from export_handcheck import label_blocks, thumbnail  # noqa: E402
 
-from embereye.data import flame2 as f2  # noqa: E402
-from embereye.data.flame2_split import GAP_FRAMES, SPLITS, VAL_TEST_BLOCKS, assign_splits, check_split, split_ranges  # noqa: E402
+from vigil.data import flame2 as f2  # noqa: E402
+from vigil.data.flame2_split import GAP_FRAMES, SPLITS, VAL_TEST_BLOCKS, assign_splits, check_split, split_ranges  # noqa: E402
 
 OUT = f2.FLAME2_DIR / "yolo_seg.nosync"
 GATE = 0.25  # hot_mask max_frame_median, as decided in Phase 4
@@ -243,7 +243,7 @@ def main() -> None:
         "gap_frames": GAP_FRAMES,
         "val_test_blocks": VAL_TEST_BLOCKS,
         "ranges": split_ranges(assignment),
-        "hot_mask": {"gate_max_frame_median": GATE, "other_parameters": "defaults in embereye.data.flame2"},
+        "hot_mask": {"gate_max_frame_median": GATE, "other_parameters": "defaults in vigil.data.flame2"},
         "frames": records,
     }
     (OUT / "split.json").write_text(json.dumps(split_json, separators=(",", ":")))

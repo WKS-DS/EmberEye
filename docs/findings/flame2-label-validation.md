@@ -4,7 +4,7 @@ _2026-10-21 · Milestone M4 (Phase 4) · data in `data/flame2/handcheck/` (not i
 
 ## Question
 
-FLAME 2 has frame-level labels only, so the training masks come from the thermal frames, using `hot_mask` in `src/embereye/data/flame2.py`. Its threshold is set relative to each frame and depends on the palette. Almost every fire frame gets a mask, but that is by design and says nothing about quality. Do the masks match what a person marks as fire closely enough to train on?
+FLAME 2 has frame-level labels only, so the training masks come from the thermal frames, using `hot_mask` in `src/vigil/data/flame2.py`. Its threshold is set relative to each frame and depends on the palette. Almost every fire frame gets a mask, but that is by design and says nothing about quality. Do the masks match what a person marks as fire closely enough to train on?
 
 ## Method
 
@@ -74,7 +74,7 @@ The empty-mask share went from 0.1% to 0.3%, measured on every 50th rainbow fire
 
 ## Split used for training
 
-The labels were exported with the Phase 4.4 block split (`src/embereye/data/flame2_split.py`), by `scripts/export_flame2_yolo.py` run from commit `787be91`.
+The labels were exported with the Phase 4.4 block split (`src/vigil/data/flame2_split.py`), by `scripts/export_flame2_yolo.py` run from commit `787be91`.
 
 - `split.json` SHA-256: `2ef6854913c7d71624f7035ba05859ea39a91f472b2380cdf085f946e2aea336`
 - Rule: val is for choosing settings, test is used once at the end, and the split never changes after training starts.
