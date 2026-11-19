@@ -71,55 +71,22 @@ for result in results:
 
 **Purpose:** Find the point on the ground that a pixel shows, in local metres (and from there, GPS). Inputs: pixel (x, y), the camera pose from telemetry, the camera's field of view, and terrain elevation.
 
-**Built so far: flat ground** (`pipeline/georef.py`, `GeoRef`). It rebuilds the camera from a frame's telemetry and field of view only. On the flat demo flight it picks the cell MuJoCo rendered for 99.97% of pixels (worst frame 99.80%); the rest are pixels on a cell border. It refuses frames that report gimbal roll, and takes gimbal yaw as relative to the drone's heading. Steps 2–3 below (terrain) are next.
+**Built** (`pipeline/georef.py`, `GeoRef`): flat ground, or terrain from a `Terrain` elevation grid on a `GroundGrid`. It rebuilds the camera from a frame's telemetry and field of view only. Against the cells MuJoCo rendered, it picks the right cell for 99.99% of pixels on the flat demo and the demo hill, and 99.96% on the hard scenario's 90 m hill (worst frame 99.82%, on the full-size demo hill); the rest are pixels on a cell border. Flat ground at the datum gets between 1% and 90% right on the same hill flights. It refuses frames that report gimbal roll, and takes gimbal yaw as relative to the drone's heading.
 
 **How it works:**
-1. **A ray per pixel.** Build the camera pose from telemetry (position, heading, gimbal pitch and roll) and get the pixel's viewing direction with `CameraModel.pixel_rays(pose, x, y)` from `sim/camera.py`. This is exact pinhole-camera geometry, tested as the inverse of `CameraModel.project()`.
-2. **Intersect the ray with the terrain.** Step along the ray in coarse steps until it drops below `Terrain.elevation`, then narrow down the crossing point by bisection.
+1. **A ray per pixel.** Build the camera pose from telemetry (position, heading, gimbal pitch and yaw) and get the pixel's viewing direction with `CameraModel.pixel_rays(pose, x, y)` from `sim/camera.py`. This is exact pinhole-camera geometry, tested as the inverse of `CameraModel.project()`.
+2. **Intersect the ray with the terrain.** Each cell's ground is flat at the cell's elevation, like the simulator's tiles. Walk the ray across the grid one cell at a time, from the edge where it enters a cell to the edge where it leaves, and stop in the first cell where it has dropped below the cell's top: it hits that top, or the cell's side if it came in below the top. Only the stretch between the highest and lowest ground level, over the grid, needs walking; a ray that meets no cell lands on the lowest level beyond the grid.
 3. **Camera height from MSL altitude + DEM**, not "AGL under the drone". The ground under the drone is not the ground the camera is looking at, so a single height-above-ground number can't place an oblique view.
 
 **Coordinates:** use `geo.LocalFrame` for GPS ↔ metres. It picks the UTM zone from the longitude (Spokane is zone 11, EPSG:32611). Never hard-code a zone.
 
 **Why terrain matters:** on the simulator's 40 m demo hill, intersecting rays with a flat plane at the ground height under the drone misplaces points by a mean of 26–43 m per frame (95th percentile 64–124 m), measured on 21 frames of the demo orbit. On flat ground the same method is exact.
 
-```python
-import numpy as np
-
-
-def georef_pixel(camera, pose, x, y, terrain, grid, step_m=5.0, max_range_m=3000.0):
-    """(east, north, up) of the ground point seen by pixel (x, y), or None.
-
-    camera:  sim.camera.CameraModel       pose: sim.camera.CameraPose
-    terrain: prediction.terrain.Terrain   grid: geo.GroundGrid (same shape as terrain)
-    """
-    ray = camera.pixel_rays(pose, x, y)  # unit vector in (east, north, up)
-    start = pose.position  # local metres; up = MSL altitude - LocalFrame.origin_alt_m
-
-    def height_above_ground(distance):
-        east, north, up = start + distance * ray
-        cell = grid.cell_at(east, north)
-        ground = terrain.elevation[cell] if cell is not None else terrain.elevation.min()
-        return up - ground
-
-    # 1. Coarse steps until the ray is below the ground.
-    near = 0.0
-    for far in np.arange(step_m, max_range_m, step_m):
-        if height_above_ground(far) <= 0:
-            # 2. Bisection: halve the gap between "still above" and "below" 30 times.
-            for _ in range(30):
-                middle = (near + far) / 2
-                if height_above_ground(middle) > 0:
-                    near = middle
-                else:
-                    far = middle
-            return start + far * ray
-        near = far
-    return None  # never reaches the ground within max_range_m (e.g. a pixel showing sky)
-```
+**Why not fixed steps:** stepping along the ray (say every half cell) until it is underground, then narrowing down by bisection, misses a cell whenever the ray dips below that cell's corner for less than one step. On the demo hill that put about 5% of pixels a cell too far, and it was 20–30 times slower than walking cell by cell.
 
 Notes:
-- The elevation lookup is nearest-cell, which matches the simulator's flat-topped tiles exactly. For a real DEM, interpolate (bilinear).
-- Coarse steps can jump over a ridge thinner than `step_m`, so keep `step_m` below the DEM cell size.
+- Flat-topped cells match the simulator exactly. A real DEM will need interpolation between cells (bilinear); not built yet.
+- Pixels that look level or upwards get no ground point, even if they show a hillside higher than the camera. That only happens when the drone flies lower than the terrain around it.
 - In the sim, the true ground point for a pixel comes from `SimObservation.cell_ids` (which cell it shows) plus the same ray/terrain intersection. See Scoring under System-Level Validation.
 
 **Hardware:**
@@ -567,7 +534,7 @@ Stage 3 does not attempt autonomous fire suppression. Instead, it uses Stage 2's
 ## Suggested Build Order
 
 1. ✅ **Sim adapter** — Spread Predictor fire on ground grid, scripted MuJoCo camera, exact pose (done: `src/vigil/sim/`, `adapters/sim.py`)
-2. 🔄 **GeoRef + Fire Mapper** — Score against sim ground truth (GeoRef on flat ground done: `pipeline/georef.py`)
+2. 🔄 **GeoRef + Fire Mapper** — Score against sim ground truth (GeoRef done, flat ground and terrain: `pipeline/georef.py`)
 3. **Arrival-time predictor** — Test with wrong wind/fuel vs ground truth
 4. **FLAME 2 detector** — Parallel track; independent of sim
 

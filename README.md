@@ -42,7 +42,7 @@ Vigil/
 │   │   └── dji.py                  # DJI SDK adapter (planned)
 │   ├── pipeline/                   # Stage 1: detection
 │   │   ├── detector.py             # YOLO11-seg fire masks (planned)
-│   │   ├── georef.py               # Pixel → ground point: camera ray + terrain (planned)
+│   │   ├── georef.py               # Pixel → ground point: camera ray + terrain
 │   │   ├── temporal_filter.py      # Confirm fire per ground cell (planned)
 │   │   ├── fire_mapper.py          # Ground map of confirmed fire (planned)
 │   │   └── alerter.py              # One alert per fire region (planned)
