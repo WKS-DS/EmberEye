@@ -1,6 +1,6 @@
 # Vigil Development Workflow
 
-**Purpose:** a simple workflow for one developer working with Claude Code. `main` always works, nothing sensitive reaches the public repo, and every change is small enough to review.
+**Purpose:** a simple workflow for one developer. `main` always works, nothing sensitive reaches the public repo, and every change is small enough to review.
 **Last updated:** 2026-10-24
 
 ---
