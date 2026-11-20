@@ -1,9 +1,10 @@
 # Vigil Prototype — Parts List and Justification
 
-**Project:** Vigil: Aerial Thermal Situational Awareness for Wildland Fire Response
-**Author:** William [Last Name]
-**Date:** [insert]
+**Project:** Vigil: Aerial Thermal Situational Awareness for Wildland Fire Response\
+**Author:** William Scott\
 **Estimated total:** $950 (base) / $1,220 (recommended)
+
+*This is the funding proposal as submitted. Some plans have changed since: for example, training now runs on Google Colab Pro rather than Gonzaga's cluster. [ARCHITECTURE.md](ARCHITECTURE.md) has the current design.*
 
 ---
 
