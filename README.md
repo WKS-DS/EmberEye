@@ -98,7 +98,7 @@ flies. The FLAME 2 detector is built alongside it. The full design is in
 |---|---|---|
 | **M1 Sim adapter** | MuJoCo fire simulator: spread-model fire on terrain, scripted camera (orbit and lawnmower), exact pose, a hard scenario with occlusion | ✅ Done |
 | **M2 GeoRef + Fire Mapper** | Pixel → ground point (flat ground, then terrain), a map of burned and seen cells, scored on the sim (IoU over seen cells, coverage, mean and p95 georef error). The temporal filter, alerts, event log, GeoJSON and latency follow once YOLO is plugged in | ✅ Done |
-| **M3 Spread validation** | Arrival-time predictor run with wrong wind and fuel against sim truth; Next Day Wildfire Spread benchmark | Planned |
+| **M3 Spread validation** | Arrival-time predictor run with wrong wind and fuel against sim truth; Next Day Wildfire Spread benchmark | In progress |
 | **M4 FLAME 2 detector** | Palette-aware thermal labels checked by hand, block-based split, YOLO11-seg training and evaluation (RGB, thermal, fusion) | In progress |
 | **M5 Hardware prototype** | Parts, on-board compute (Raspberry Pi 5 or Jetson Orin Nano, undecided), adapter for the physical drone | Planned |
 | **M6 Field validation** | Partner burns, real footage through the full pipeline | Planned |
