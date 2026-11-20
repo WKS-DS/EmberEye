@@ -59,7 +59,7 @@ Vigil/
 │   ├── flame2/                     # FLAME 2 dataset
 │   └── sim/                        # Simulator output
 ├── tests/                          # Unit tests
-└── notebooks/                      # Exploratory analysis, labelling, training
+└── notebooks/                      # Labelling, training on Colab
 ```
 
 ---
