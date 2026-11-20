@@ -374,7 +374,7 @@ def to_model_codes(landfire_codes: np.ndarray) -> np.ndarray:
 **Validation:**
 - Benchmark against Next Day Wildfire Spread dataset (1km/day resolution)
 - Report IoU (intersection over union) between predicted and actual burned area
-- For sim testing: run predictor with deliberately wrong wind/fuel values to test against ground truth
+- For sim testing: run the predictor with deliberately wrong wind and fuel against the sim's truth. Built: `scripts/spread_sensitivity.py`; results under Spread Prediction Validation.
 
 ---
 
@@ -474,7 +474,34 @@ Stage 3 does not attempt autonomous fire suppression. Instead, it uses Stage 2's
 
 ### Spread Prediction Validation
 
-**Dataset:** Next Day Wildfire Spread (Kaggle) — 1km/day resolution
+**In the sim: how wrong can the inputs be?** Built: `scripts/spread_sensitivity.py` (scores in `sim/scoring.py`).
+- The sim's fire comes from the same model as the forecast, so with the right inputs the forecast is near perfect by construction. The test is how fast it falls apart as one input at a time is made wrong.
+- Setup: the hard scenario at 330 × 330 cells of 30 m, so the true fire stays inside the grid for 7.5 h. Each forecast starts from the true fire at 1 h, with every burned cell lit at that moment, as a fire map would give it.
+- Scored over the **new growth only**, because the area already burned matches by construction. Each cell is the IoU of the predicted and true new burn / the ratio of their areas (above 1 = too big). * = the forecast reached the grid edge, so its area is cut short.
+
+  | Input changed | 1 h | 3 h | 6 h |
+  |---|---|---|---|
+  | right inputs | 0.952 / 0.95 | 0.988 / 0.99 | 0.995 / 0.99 |
+  | wind direction +15° | 0.826 / 0.99 | 0.811 / 1.01 | 0.801 / 1.01 |
+  | wind direction +30° | 0.709 / 1.01 | 0.662 / 1.01 | 0.643 / 1.01* |
+  | wind direction +45° | 0.601 / 1.03 | 0.542 / 1.04 | 0.517 / 1.05 |
+  | wind direction +90° | 0.358 / 0.99 | 0.296 / 1.02 | 0.269 / 1.05 |
+  | wind direction +180° | 0.223 / 1.02 | 0.149 / 1.04 | 0.227 / 1.05 |
+  | wind speed ×0 | 0.370 / 0.46 | 0.309 / 0.42 | 0.280 / 0.39 |
+  | wind speed ×0.5 | 0.607 / 0.63 | 0.558 / 0.59 | 0.534 / 0.57 |
+  | wind speed ×1.5 | 0.659 / 1.46 | 0.615 / 1.58 | 0.648 / 1.52* |
+  | wind speed ×2 | 0.457 / 2.11 | 0.403 / 2.39 | 0.507 / 1.93* |
+  | fuel moisture 4% (true 8%) | 0.841 / 1.19 | 0.799 / 1.25 | 0.788 / 1.27* |
+  | fuel moisture 12% | 0.765 / 0.76 | 0.754 / 0.75 | 0.739 / 0.74 |
+  | fuel moisture 16% | 0.572 / 0.57 | 0.543 / 0.54 | 0.520 / 0.52 |
+  | fuel map all grass | 0.952 / 0.95 | 0.984 / 1.00 | 0.965 / 1.03 |
+
+- **Even the right inputs score 0.95 at 1 h.** Lighting every burned cell at the same moment forgets how far the front had already moved into the next cells. This is the floor for any forecast started from a fire map.
+- **Wind direction matters most.** 15° off costs about 0.18 IoU at 3 h, and 45° about 0.45, with the area about right: the fire goes the wrong way, not too far. Turning the wind anticlockwise instead gave scores within about 0.03.
+- **Wind speed and fuel moisture mainly change the size.** The area ratio follows the error: twice the wind gives about 2.4 times the growth at 3 h, and 16% moisture instead of 8% about half.
+- **The all-grass fuel map barely matters here, but only because of this scenario.** Its timber spreads almost as fast as grass (2.0 vs 2.5 m/min), and its road is upwind of both fires. This row doesn't show that fuel maps don't matter.
+
+**Real fires.** **Dataset:** Next Day Wildfire Spread (Kaggle) — 1km/day resolution
 
 **Metric:** IoU between predicted and actual burned area
 

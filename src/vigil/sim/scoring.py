@@ -1,8 +1,9 @@
 """
-scoring.py — Score the M2 pipeline (GeoRef + Fire Mapper) against the simulator's answer key.
+scoring.py — Score the pipeline against the simulator's answer key.
 
-The scores are defined in docs/ARCHITECTURE.md (System-Level Validation,
-Scoring); scripts/score_m2.py runs them on whole flights.
+M2 (GeoRef + Fire Mapper): the scores are defined in docs/ARCHITECTURE.md
+(System-Level Validation, Scoring); scripts/score_m2.py runs them on whole
+flights.
 
 The fire map is scored against two truths:
 - Everything burned: every cell burning or burned out at the end of the
@@ -14,16 +15,23 @@ The fire map is scored against two truths:
   record of which cell each pixel shows (SimObservation.cell_ids). This
   scores the mapping itself.
 
-Everything here takes plain arrays, so this module doesn't import the
+The M2 scores take plain arrays, so this module doesn't import the
 pipeline it scores.
+
+M3 (spread forecasts): growth_scores and forecast_growth_scores, run with
+deliberately wrong inputs by scripts/spread_sensitivity.py (results in
+docs/ARCHITECTURE.md, Spread Prediction Validation).
 """
 
 from __future__ import annotations
+
+from typing import Sequence
 
 import numpy as np
 
 from vigil.geo import GroundGrid
 from vigil.masks import iou
+from vigil.prediction.spread import SpreadPredictor
 from vigil.prediction.terrain import Terrain
 from vigil.sim.fire_sim import UNBURNED
 from vigil.sim.world import TILE_DEPTH_M
@@ -85,3 +93,42 @@ def true_ground_distance(
     with np.errstate(divide="ignore", invalid="ignore"):
         to_low, to_high = (low - start) / rays, (high - start) / rays
     return np.nanmax(np.minimum(to_low, to_high), axis=1)
+
+
+def growth_scores(predicted: np.ndarray, truth: np.ndarray, burned_now: np.ndarray) -> dict[str, float]:
+    """Scores for a spread forecast over the new growth only; all inputs are (rows, cols) True/False grids.
+
+    `burned_now` is what had burned when the forecast started. It is left
+    out: the forecast starts from it, so it matches by construction and
+    would inflate the score.
+
+    iou_growth:   IoU of the predicted and the true new burn.
+    growth_ratio: predicted new burn area / true new burn area. Above 1 the
+                  forecast runs too big, below 1 too small. NaN if nothing
+                  new truly burned.
+    """
+    new_predicted = predicted & ~burned_now
+    new_true = truth & ~burned_now
+    true_area = int(new_true.sum())
+    return {
+        "iou_growth": iou(new_predicted, new_true),
+        "growth_ratio": float(new_predicted.sum() / true_area) if true_area else float("nan"),
+    }
+
+
+def forecast_growth_scores(
+    truth: SpreadPredictor, forecast: SpreadPredictor, now_min: float, hours: Sequence[float]
+) -> dict[float, dict[str, float]]:
+    """Start `forecast` from the cells `truth` has burned by `now_min`, and score its new growth `hours` later.
+
+    Every one of those cells is lit at now_min, as a fire map gives them:
+    it says which cells have burned, not when the fire reached each one.
+    That forgets how far the front had already moved into the next cells,
+    so even with the right inputs the forecast lags a little. `truth` must
+    already be propagated. Returns {hours: growth_scores(...)}.
+    """
+    burned_now = truth.burned_at(now_min)
+    forecast.reset()
+    forecast.set_ignition(np.argwhere(burned_now), start_time_min=now_min)
+    predicted = forecast.predict(hours)
+    return {h: growth_scores(predicted[f"{h:g}hr"], truth.burned_at(now_min + 60 * h), burned_now) for h in hours}
