@@ -54,6 +54,9 @@ def main() -> None:
 
     from ultralytics import YOLO  # imported here so --help works without it
 
+    # Written on resume too: a new Colab session starts without it, and the
+    # checkpoint points at this path.
+    data = write_dataset_yaml(args.data_dir, args.train_list, args.val_list)
     if args.resume:
         last = args.out / args.name / "weights" / "last.pt"
         if not last.exists():
@@ -62,7 +65,6 @@ def main() -> None:
     else:
         if (args.out / args.name).exists():
             raise SystemExit(f"{args.out / args.name} already exists. Use --resume, or a new --name.")
-        data = write_dataset_yaml(args.data_dir, args.train_list, args.val_list)
         YOLO(args.model).train(
             data=str(data),
             epochs=args.epochs,
