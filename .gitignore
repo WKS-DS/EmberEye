@@ -13,9 +13,6 @@
 .env.*
 !.env.example
 
-# Personal Claude Code instructions, loaded alongside CLAUDE.md
-CLAUDE.local.md
-
 # Python
 __pycache__/
 *.py[cod]
